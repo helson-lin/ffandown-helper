@@ -1,0 +1,31 @@
+{
+  "name": "ffmpeg-helper",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "nodemon test.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "eslint": "^8.0.1",
+    "eslint-config-standard": "^17.0.0",
+    "eslint-plugin-import": "^2.25.2",
+    "eslint-plugin-n": "^15.0.0",
+    "eslint-plugin-promise": "^6.0.0"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.0",
+    "download": "^8.0.0",
+    "fluent-ffmpeg": "^2.1.2",
+    "fs-extra": "^11.1.1",
+    "lodash.throttle": "^4.1.1",
+    "node-fetch": "2",
+    "npmlog": "^7.0.1",
+    "sequelize": "^6.32.0",
+    "sqlite3": "^5.1.6",
+    "uuid": "9"
+  }
+}

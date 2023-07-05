@@ -1,0 +1,6 @@
+.vscode
+.idea
+lib
+database
+media
+node_modules
