@@ -34,7 +34,6 @@ const dbOperation = {
             const download = await SysDownloadDb.update(body, { where: { uid } })
             return Promise.resolve(download)
         } catch (e) {
-            console.log('update failed', e)
             return Promise.reject(e)
         }
     },
