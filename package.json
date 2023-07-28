@@ -1,9 +1,9 @@
 {
-  "name": "ffandown-helper",
-  "version": "1.0.0",
+  "name": "oimi-helper",
+  "version": "1.0.3",
   "description": "this is a helper for ffandown",
-  "main": "index.js",
-  "bin": "index.js",
+  "main": "src/index.js",
+  "bin": "src/index.js",
   "scripts": {
     "test": "nodemon test.js"
   },

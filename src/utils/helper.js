@@ -105,22 +105,25 @@ const Helper = {
     setEnv (type, path) {
         if (type === 'ffmpeg') {
             ffmpeg.setFfmpegPath(path)
-            console.log('[ffdown] ffmpeg: 环境变量设置成功')
+            console.log('[ffandown] ffmpeg: 环境变量设置成功')
         }
         if (type === 'ffprobe') {
             ffmpeg.setFfprobePath(path)
-            console.log('[ffdown] ffprobe: 环境变量设置成功')
+            console.log('[ffandown] ffprobe: 环境变量设置成功')
         }
     },
     /**
      * is need download
      * @param {String} type ffmpeg ffprobe
-     * @returns {boolean}
+     * @returns {boolean} true: need to download ffmpeg
     */
     needDownload (type) {
         const libPath = this.getLibPath(type)
         const isExist = this.isExist(libPath)
-        if (isExist) this.setEnv(type, libPath)
+        if (isExist) {
+            this.setEnv(type, libPath)
+            return false
+        }
         return true
     },
     /**

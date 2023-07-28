@@ -30,7 +30,8 @@ const tiktok = {
             room_id: roomId,
             app_id: '1128',
         }
-        let url = 'https://webcast.amemv.com/webcast/room/reflow/info?'
+        // let url = 'https://webcast.amemv.com/webcast/room/reflow/info?'
+        let url = 'https://live.douyin.com/webcast/room/web/enter/?'
         for (const key in params) {
             url += `${key}=${params[key]}&`
         }
@@ -43,7 +44,10 @@ const tiktok = {
                     const { resolution_name, flv_pull_url, hls_pull_url_map } = data?.data?.room.stream_url
                     // eslint-disable-next-line camelcase
                     resolve({ resolution_name, flv_pull_url, hls_pull_url_map })
-                }).catch(err => reject(err))
+                }).catch(err => {
+                    console.log(err)
+                    reject(err)
+                })
             } catch (e) {
                 reject(e)
             }
