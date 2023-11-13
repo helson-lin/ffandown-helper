@@ -72,9 +72,9 @@ class Oimi {
      * @param {string} name 
      * @returns {string} path 
      */
-    getDownloadFilePathAndName (name) {
+    getDownloadFilePathAndName (name, outputformat) {
         const fileName = name || new Date().getTime()
-        const filePath = path.join(this.OUTPUT_DIR ?? process.cwd(), fileName + '.mp4')
+        const filePath = path.join(this.OUTPUT_DIR ?? process.cwd(), fileName + `.${outputformat || 'mp4'}`)
         return { fileName, filePath }
     }
     /**
@@ -100,17 +100,17 @@ class Oimi {
 
     /**
      * @description create download mission
-     * @param {object} query url: download url, name: download mission name
+     * @param {object} query url: download url, name: download mission name outputformat
      */
     async createDownloadMission (query) {
-        const { name, url } = query
+        const { name, url, outputformat, preset } = query
         if (!url) {
             throw new Error('url is required')
         }
         // eslint-disable-next-line no-useless-catch
         try {
             const realUrl = await this.parserUrl(url)
-            const { fileName, filePath } = this.getDownloadFilePathAndName(name)
+            const { fileName, filePath } = this.getDownloadFilePathAndName(name, outputformat)
             const uid = uuidv4()
             const ffmpegHelper = new FfmpegHelper()
 
@@ -128,6 +128,7 @@ class Oimi {
             await ffmpegHelper.setInputFile(realUrl)
             .setOutputFile(filePath)
             .setThreads(this.THREAD)
+            .setPreset(preset)
             .start(params => {
                 // 实时更新任务信息
                 const throttledFunction = throttle(

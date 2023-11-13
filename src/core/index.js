@@ -10,6 +10,10 @@ const log = require('../utils/logger')
   * @class
   */
 class FfmpegHelper {
+    PRESET
+    THREADS
+    M3U8_FILE
+    PROTOCOL_TYPE
     constructor (options) {
         if (options?.THREADS) this.THREADS = options.THREADS
     }
@@ -45,6 +49,18 @@ class FfmpegHelper {
     setThreads (number) {
         if (number) {
             this.THREADS = number
+        }
+        return this
+    }
+
+    /**
+     * Description set video preset
+     * @date 2023/11/13 - 16:03:29
+     * @param {String} preset video preset
+     */
+    setPreset (preset) {
+        if (preset) {
+            this.PRESET = preset
         }
         return this
     }
@@ -102,8 +118,7 @@ class FfmpegHelper {
         if (this.TIMEMARK) {
             this.ffmpegCmd.seekInput(this.TIMEMARK)
         }
-        this.ffmpegCmd.outputOptions('-movflags +faststart')
-        this.ffmpegCmd.outputOptions('-preset veryfast')
+        this.ffmpegCmd.outputOptions(`-preset ${this.PRESET || 'veryfast'}`)
         const liveProtocol = this.PROTOCOL_TYPE
         if (liveProtocol === 'live') {
             this.ffmpegCmd
