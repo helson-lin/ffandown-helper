@@ -7,9 +7,9 @@
   "scripts": {
     "test": "nodemon test.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": ["ffandown", "ffmpeg", "download", "douyin", "bilibili"],
+  "author": "helsonlin",
+  "license": "MIT",
   "devDependencies": {
     "eslint": "^8.0.1",
     "eslint-config-standard": "^17.0.0",
