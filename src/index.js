@@ -10,7 +10,17 @@ const log = require('./utils/logger')
 require('dotenv').config()
 
 class Oimi {
+    OUTPUT_DIR
+    missionList
+    THREAD
+    verbose
+    parserPlugins
+    helper
+    dbOperation
+
     constructor (OUTPUT_DIR, THREAD = true, verbose = false) {
+        this.helper = helper
+        this.dbOperation = dbOperation
         if (OUTPUT_DIR) this.OUTPUT_DIR = this.helper.ensurePath(OUTPUT_DIR)
         this.missionList = []
         this.THREAD = THREAD && this.getCpuNum()
@@ -46,11 +56,15 @@ class Oimi {
         if (!url) {
             throw new Error('url is required')
         }
-        const parserPlugin = this.parserPlugins.find((parser) => parser.match(url))
+        const parserPlugin = this.parserPlugins.find((parser) => parser.handler.match(url))
         if (!parserPlugin) {
             return url
         }
-        return await parserPlugin.parser(url)
+        const parseredInfo = await parserPlugin.handler.parser(url)
+        return {
+            name: parserPlugin.name,
+            data: parseredInfo,
+        }
     }
 
     /**
@@ -131,6 +145,4 @@ class Oimi {
     }
 }
 
-Oimi.prototype.helper = helper
-Oimi.prototype.dbOperation = dbOperation
 module.exports = Oimi
