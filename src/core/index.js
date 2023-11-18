@@ -11,6 +11,7 @@ const log = require('../utils/logger')
   */
 class FfmpegHelper {
     PRESET
+    OUTPUTFORMAT
     THREADS
     M3U8_FILE
     PROTOCOL_TYPE
@@ -61,6 +62,13 @@ class FfmpegHelper {
     setPreset (preset) {
         if (preset) {
             this.PRESET = preset
+        }
+        return this
+    }
+
+    setOutputFormat (outputformat) {
+        if (outputformat) {
+            this.OUTPUTFORMAT = outputformat
         }
         return this
     }
@@ -179,13 +187,14 @@ class FfmpegHelper {
             const { duration } = data.format
             this.ffmpegCmd
             .on('progress', (progress) => {
-                const percent = (progress.percent * 100) / 100
+                // TODO：速度优化
+                const percent = toFixed((progress.percent * 100) / 100)
                 const processedDuration = duration * (progress.percent / 100)
                 const remainingDuration = duration - processedDuration
                 const currentMbs = formatSpeed(progress.currentKbps)
                 if (callback && typeof callback === 'function') {
                     const params = {
-                        percent: toFixed(percent),
+                        percent: percent >= 100 ? 100 : percent,
                         process: toFixed(processedDuration),
                         remaining: toFixed(remainingDuration),
                         currentMbs,
@@ -214,6 +223,7 @@ class FfmpegHelper {
             this.ffmpegCmd = ffmpeg(this.M3U8_FILE)
             this.ffmpegCmd
             .on('error', (error) => {
+                // updatemission 
                 reject(error)
             })
             .on('stderr', function (stderrLine) {
@@ -228,7 +238,7 @@ class FfmpegHelper {
             this.setInputOption()
             this.setOutputOption()
             this.monitorProcess(listenProcess)
-            this.ffmpegCmd.format('mp4') 
+            this.ffmpegCmd.format(this.OUTPUTFORMAT || 'mp4') 
             this.ffmpegCmd.run()
         })
     }

@@ -73,7 +73,8 @@ class Oimi {
      * @returns {string} path 
      */
     getDownloadFilePathAndName (name, outputformat) {
-        const fileName = name || new Date().getTime()
+        const tm = String(new Date().getTime())
+        let fileName = name ? `${name}_${tm}` : tm
         const filePath = path.join(this.OUTPUT_DIR ?? process.cwd(), fileName + `.${outputformat || 'mp4'}`)
         return { fileName, filePath }
     }
@@ -86,14 +87,12 @@ class Oimi {
 
     async updateMission (uid, info, finish = false) {
         const oldMission = this.missionList.find(i => i.uid === uid)
-        const { percent, currentMbs, timemark, targetSize, name } = info
+        const { percent, currentMbs, timemark, targetSize, status, name, message } = info
         if (!finish) {
-            oldMission.status = '1'
-            // log.info(`${name}: ${currentMbs} ${percent}% ${targetSize}`)
-            await this.dbOperation.update(uid, { percent, speed: currentMbs, timemark, size: targetSize, status: '1' })
+            oldMission.status = status || '1'
+            await this.dbOperation.update(uid, { name, percent, speed: currentMbs, timemark, size: targetSize, message, status: status || '1' })
         } else {
             oldMission.status = '3'
-            log.info(`${name}: finish`)
             await this.dbOperation.update(uid, { status: '3' })
         }
     }
@@ -104,31 +103,30 @@ class Oimi {
      */
     async createDownloadMission (query) {
         const { name, url, outputformat, preset } = query
-        if (!url) {
-            throw new Error('url is required')
+        if (!url) throw new Error('url is required')
+        const realUrl = await this.parserUrl(url)
+        const { fileName, filePath } = this.getDownloadFilePathAndName(name, outputformat)
+        const uid = uuidv4()
+        const ffmpegHelper = new FfmpegHelper()
+
+        const mission = {
+            uid,
+            name: fileName,
+            url: realUrl,
+            status: '0',
+            filePath,
+            percent: 0,
+            message: '',
         }
+        this.missionList.push({ ...mission, ffmpegHelper })
         // eslint-disable-next-line no-useless-catch
         try {
-            const realUrl = await this.parserUrl(url)
-            const { fileName, filePath } = this.getDownloadFilePathAndName(name, outputformat)
-            const uid = uuidv4()
-            const ffmpegHelper = new FfmpegHelper()
-
-            const mission = {
-                uid,
-                name: fileName,
-                url: realUrl,
-                status: '0',
-                filePath,
-                percent: 0,
-            }
-
-            this.missionList.push({ ...mission, ffmpegHelper })
             await this.dbOperation.create(mission)
             await ffmpegHelper.setInputFile(realUrl)
             .setOutputFile(filePath)
             .setThreads(this.THREAD)
             .setPreset(preset)
+            .setOutputFormat(outputformat)
             .start(params => {
                 // 实时更新任务信息
                 const throttledFunction = throttle(
@@ -141,9 +139,12 @@ class Oimi {
             this.updateMission(uid, mission, true)
             return 'success download'
         } catch (e) {
+            this.updateMission(uid, { ...mission, status: '4', message: String(e) })
             throw e
         }
     }
+
+    // 删除任务
 }
 
 module.exports = Oimi

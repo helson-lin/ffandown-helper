@@ -55,6 +55,10 @@ const SysDownloadDb = sequelize.define('sys_download', {
         default: '0',
         comment: '0/initial status; 1/ downloading status; 2/stopped status; 3/ finish status;',
     },
+    message: {
+        type: Sequelize.STRING,
+        allowNull: false,
+    },
 })
 
 module.exports = { SysDownloadDb, sequelize }
