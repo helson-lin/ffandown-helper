@@ -88,12 +88,16 @@ class Oimi {
     async updateMission (uid, info, finish = false) {
         const oldMission = this.missionList.find(i => i.uid === uid)
         const { percent, currentMbs, timemark, targetSize, status, name, message } = info
-        if (!finish) {
-            oldMission.status = status || '1'
-            await this.dbOperation.update(uid, { name, percent, speed: currentMbs, timemark, size: targetSize, message, status: status || '1' })
+        if (oldMission) {
+            if (!finish) {
+                oldMission.status = status || '1'
+                await this.dbOperation.update(uid, { name, percent, speed: currentMbs, timemark, size: targetSize, message, status: status || '1' })
+            } else {
+                oldMission.status = '3'
+                await this.dbOperation.update(uid, { status: '3' })
+            }
         } else {
-            oldMission.status = '3'
-            await this.dbOperation.update(uid, { status: '3' })
+            await this.dbOperation.update(uid, { name, percent, speed: currentMbs, timemark, size: targetSize, message, status: status || '1' })
         }
     }
 
@@ -145,6 +149,77 @@ class Oimi {
     }
 
     // 删除任务
+    async deleteMission (uid) {
+        let inMissonList = true
+        let mission = this.missionList.find(i => i.uid === uid)
+        if (!mission) {
+            inMissonList = false
+            mission = await this.dbOperation.queryOne(uid)
+        }
+        if (mission) {
+            inMissonList && mission.ffmpegHelper.kill()
+            await this.dbOperation.delete(uid)
+            this.helper.removeFile(mission.filePath)    
+            return 'mission delete'
+        }
+        return 'mission not found'
+    }
+
+    // 通过uid 暂停任务下载
+    async pauseMission (uid) {
+        const mission = this.missionList.find(i => i.uid === uid) 
+        if (mission) {
+            mission.ffmpegHelper.kill('SIGSTOP')
+        }
+    }
+
+    // 通过uid 恢复下载任务
+    async resumeDownload (uid) {
+        const missionInList = this.missionList.find(i => i.uid === uid)
+        if (missionInList) {
+            missionInList.ffmpegHelper.kill('SIGCONT')
+        } else {
+            // 恢复下载任务存在两种情况 missionList里面已经存在数据 直接调用kill('恢复')
+            const mission = await this.dbOperation.queryOne(uid)
+            if (mission) {
+                try {
+                    const suffix = this.helper.getUrlFileExt(mission.filePath)
+                    const ffmpegHelper = new FfmpegHelper()
+                    this.missionList.push({ ...mission, ffmpegHelper })
+                    await ffmpegHelper.setInputFile(mission.url)
+                    .setOutputFile(mission.filePath)
+                    .setThreads(this.THREAD)
+                    .setTimeMark(mission.timemark)
+                    .setOutputFormat(suffix)
+                    .start(params => {
+                        const throttledFunction = throttle(
+                            this.updateMission.bind(this, uid, { 
+                                ...mission, 
+                                status: '1', 
+                                ...params }),
+                            2000,
+                        )
+                        throttledFunction()
+                    })
+                    this.updateMission(uid, mission, true)
+                    return 'success download'
+                } catch (e) {
+                    this.updateMission(uid, { ...mission, status: '4', message: String(e) })
+                    throw e
+                }
+            } else {
+                return 'mission not found'
+            }
+        }
+    }   
+
+    // 停止所有的任务
+    async killAll () {
+        for (const mission of this.missionList) {
+            mission.ffmpegHelper.kill('SIGSTOP')
+            await this.dbOperation.update(mission.uid, { ...mission, status: '2' })
+        }
+    }
 }
 
 module.exports = Oimi

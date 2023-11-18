@@ -190,6 +190,13 @@ const Helper = {
         fse.ensureDirSync(relPath)
         return relPath
     },
+    getUrlFileExt (url) {
+        const parsedUrl = new URL(`http://${url}`)
+        return parsedUrl.pathname.split('.').pop()
+    },
+    removeFile (path) {
+        fse.removeSync(path)
+    },
 }
 
 module.exports = Helper

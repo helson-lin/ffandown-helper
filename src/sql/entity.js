@@ -59,6 +59,14 @@ const SysDownloadDb = sequelize.define('sys_download', {
         type: Sequelize.STRING,
         allowNull: false,
     },
+    crt_tm: {
+        type: Sequelize.STRING,
+        allowNull: false,
+    },
+    upd_tm: {
+        type: Sequelize.STRING,
+        allowNull: false,
+    },
 })
 
 module.exports = { SysDownloadDb, sequelize }

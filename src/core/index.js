@@ -12,6 +12,7 @@ const log = require('../utils/logger')
 class FfmpegHelper {
     PRESET
     OUTPUTFORMAT
+    
     THREADS
     M3U8_FILE
     PROTOCOL_TYPE
@@ -241,6 +242,14 @@ class FfmpegHelper {
             this.ffmpegCmd.format(this.OUTPUTFORMAT || 'mp4') 
             this.ffmpegCmd.run()
         })
+    }
+
+    // kill the process
+    kill (signal = 'SIGKILL') {
+        // SIGSTOP 挂起下载任务
+        // SIGCONT 恢复下载任务
+        // SIGKILL 
+        this.ffmpegCmd.kill(signal)
     }
 }
 module.exports = FfmpegHelper

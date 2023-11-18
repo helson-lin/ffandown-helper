@@ -15,7 +15,8 @@ const dbOperation = {
      */
     async create (body) {
         try {
-            const download = await SysDownloadDb.create({ ...body })
+            const time = new Date().toLocaleString()
+            const download = await SysDownloadDb.create({ ...body, crt_tm: time, upd_tm: time })
             return Promise.resolve(download)
         } catch (e) {
             return Promise.reject(e)
@@ -31,7 +32,10 @@ const dbOperation = {
     },
     async update (uid, body) {
         try {
-            const download = await SysDownloadDb.update(body, { where: { uid } })
+            const mission = body
+            if (!mission.crt_tm) mission.crt_tm = new Date().toLocaleString()
+            if (!mission.upd_tm) mission.upd_tm = new Date().toLocaleString()
+            const download = await SysDownloadDb.update(mission, { where: { uid } })
             return Promise.resolve(download)
         } catch (e) {
             return Promise.reject(e)
@@ -41,6 +45,14 @@ const dbOperation = {
         try {
             const all = await SysDownloadDb.findAll()
             return Promise.resolve(all)
+        } catch (e) {
+            return Promise.reject(e)
+        }
+    },
+    async queryOne (uid) {
+        try {
+            const mission = await SysDownloadDb.findOne({ where: { uid } })
+            return Promise.resolve(mission)
         } catch (e) {
             return Promise.reject(e)
         }
