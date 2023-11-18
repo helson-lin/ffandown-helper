@@ -130,7 +130,7 @@ class Oimi {
             .start(params => {
                 // 实时更新任务信息
                 const throttledFunction = throttle(
-                    this.updateMission.bind(this, uid, { ...mission, ...params }),
+                    this.updateMission.bind(this, uid, { ...mission, status: '1', ...params }),
                     2000,
                 )
                 throttledFunction()
