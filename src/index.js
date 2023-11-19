@@ -167,50 +167,61 @@ class Oimi {
 
     // 通过uid 暂停任务下载
     async pauseMission (uid) {
-        const mission = this.missionList.find(i => i.uid === uid) 
-        if (mission) {
-            mission.ffmpegHelper.kill('SIGSTOP')
+        try {
+            const mission = this.missionList.find(i => i.uid === uid) 
+            if (mission) {
+                mission.ffmpegHelper.kill('SIGSTOP')
+                this.updateMission(uid, { ...mission, status: '2' })
+            }
+            return 'mission pause'
+        } catch (e) {
+            return e
         }
     }
 
     // 通过uid 恢复下载任务
-    async resumeDownload (uid) {
-        const missionInList = this.missionList.find(i => i.uid === uid)
-        if (missionInList) {
-            missionInList.ffmpegHelper.kill('SIGCONT')
-        } else {
-            // 恢复下载任务存在两种情况 missionList里面已经存在数据 直接调用kill('恢复')
-            const mission = await this.dbOperation.queryOne(uid)
-            if (mission) {
-                try {
-                    const suffix = this.helper.getUrlFileExt(mission.filePath)
-                    const ffmpegHelper = new FfmpegHelper()
-                    this.missionList.push({ ...mission, ffmpegHelper })
-                    await ffmpegHelper.setInputFile(mission.url)
-                    .setOutputFile(mission.filePath)
-                    .setThreads(this.THREAD)
-                    .setTimeMark(mission.timemark)
-                    .setOutputFormat(suffix)
-                    .start(params => {
-                        const throttledFunction = throttle(
-                            this.updateMission.bind(this, uid, { 
-                                ...mission, 
-                                status: '1', 
-                                ...params }),
-                            2000,
-                        )
-                        throttledFunction()
-                    })
-                    this.updateMission(uid, mission, true)
-                    return 'success download'
-                } catch (e) {
-                    this.updateMission(uid, { ...mission, status: '4', message: String(e) })
-                    throw e
+    resumeDownload (uid) {
+        return new Promise((resolve, reject) => {
+            (async () => {
+                const missionInList = this.missionList.find(i => i.uid === uid)
+                if (missionInList) {
+                    missionInList.ffmpegHelper.kill('SIGCONT')
+                    resolve('resume download')
+                } else {
+                    // 恢复下载任务存在两种情况 missionList里面已经存在数据 直接调用kill('恢复')
+                    const mission = await this.dbOperation.queryOne(uid)
+                    if (mission) {
+                        try {
+                            const suffix = this.helper.getUrlFileExt(mission.filePath)
+                            const ffmpegHelper = new FfmpegHelper()
+                            this.missionList.push({ ...mission, ffmpegHelper })
+                            await ffmpegHelper.setInputFile(mission.url)
+                            .setOutputFile(mission.filePath)
+                            .setThreads(this.THREAD)
+                            .setTimeMark(mission.timemark)
+                            .setOutputFormat(suffix)
+                            .start(params => {
+                                resolve('resume download')
+                                const throttledFunction = throttle(
+                                    this.updateMission.bind(this, uid, { 
+                                        ...mission, 
+                                        status: '1', 
+                                        ...params }),
+                                    2000,
+                                )
+                                throttledFunction()
+                            })
+                            this.updateMission(uid, mission, true)
+                        } catch (e) {
+                            this.updateMission(uid, { ...mission, status: '4', message: String(e) })
+                            reject(e)
+                        }
+                    } else {
+                        reject(new Error('mission not found'))
+                    }
                 }
-            } else {
-                return 'mission not found'
-            }
-        }
+            })()
+        })
     }   
 
     // 停止所有的任务
