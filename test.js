@@ -5,12 +5,15 @@ const Oimi = require('./src/index')
 
 const oi = new Oimi('media')
 oi.ready().then(() => {
-    const url = 'http://devimages.apple.com/iphone/samples/bipbop/bipbopall.m3u8'
-    oi.createDownloadMission({ name: 'wolai', url, outputformat: 'flv' }).then(() => {
-        console.log('download success')
-    }).catch(e =>
-        console.log('download failed:' + e),
-    )
+    // eslint-disable-next-line max-len
+    const urls = 'http://devimages.apple.com/iphone/samples/bipbop/bipbopall.m3u8,http://devimages.apple.com/iphone/samples/bipbop/bipbopall.m3u8,http://devimages.apple.com/iphone/samples/bipbop/bipbopall.m3u8,http://devimages.apple.com/iphone/samples/bipbop/bipbopall.m3u8'
+    for (const url of urls.split(',')) {
+        oi.createDownloadMission({ name: 'wolai', url, outputformat: 'flv' }).then(() => {
+            console.log('download success')
+        }).catch(e =>
+            console.log('download failed:' + e),
+        )
+    }
     // setTimeout(async () => {
     //     const mission = oi.missionList[oi.missionList.length - 1]
     //     // mission && oi.deleteMission(mission.uid).then((res) => {

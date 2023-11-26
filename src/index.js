@@ -89,7 +89,7 @@ class Oimi {
         const oldMission = this.missionList.find(i => i.uid === uid)
         const { percent, currentMbs, timemark, targetSize, status, name, message } = info
         if (oldMission) {
-            if (!finish) {
+            if (!finish && oldMission.status !== '3') {
                 oldMission.status = status || '1'
                 await this.dbOperation.update(uid, { name, percent, speed: currentMbs, timemark, size: targetSize, message, status: status || '1' })
             } else {
