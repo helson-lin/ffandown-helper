@@ -11,16 +11,16 @@ oi.ready().then(() => {
     }).catch(e =>
         console.log('download failed:' + e),
     )
-    setTimeout(async () => {
-        const mission = oi.missionList[oi.missionList.length - 1]
-        // mission && oi.deleteMission(mission.uid).then((res) => {
-        //     console.log(res)
-        // })
-        await oi.pauseMission(mission.uid)
-        setTimeout(async () => {
-            await oi.resumeDownload(mission.uid)
-        }, 20000)
-    }, 18000)
+    // setTimeout(async () => {
+    //     const mission = oi.missionList[oi.missionList.length - 1]
+    //     // mission && oi.deleteMission(mission.uid).then((res) => {
+    //     //     console.log(res)
+    //     // })
+    //     await oi.pauseMission(mission.uid)
+    //     setTimeout(async () => {
+    //         await oi.resumeDownload(mission.uid)
+    //     }, 20000)
+    // }, 18000)
     // setTimeout(() => {
     //     oi.killAll()
     // }, 13000)

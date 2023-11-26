@@ -12,12 +12,17 @@ const log = require('../utils/logger')
 class FfmpegHelper {
     PRESET
     OUTPUTFORMAT
-    
+    USER_AGENT
     THREADS
     M3U8_FILE
     PROTOCOL_TYPE
     constructor (options) {
         if (options?.THREADS) this.THREADS = options.THREADS
+    }
+
+    setUserAgent (USER_AGENT) {
+        if (USER_AGENT) this.USER_AGENT = USER_AGENT
+        return this
     }
 
     /**
@@ -103,7 +108,7 @@ class FfmpegHelper {
 
     setInputOption () {
         // eslint-disable-next-line max-len
-        const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 11_1_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.182 Safari/537.36'
+        const USER_AGENT = this.USER_AGENT || 'Mozilla/5.0 (Macintosh; Intel Mac OS X 11_1_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.182 Safari/537.36'
         const REFERER_RGX = /^(?<referer>http|https:\/\/(?:[a-zA-Z0-9-]+\.)+[a-zA-Z0-9-]+)(?::\d+)?\/[^ "]+$/u
         const match = this.M3U8_FILE.match(REFERER_RGX)
         const [referer] = match === null ? ['unknown'] : match.slice(1)

@@ -106,7 +106,7 @@ class Oimi {
      * @param {object} query url: download url, name: download mission name outputformat
      */
     async createDownloadMission (query) {
-        const { name, url, outputformat, preset } = query
+        const { name, url, outputformat, preset, useragent } = query
         if (!url) throw new Error('url is required')
         const realUrl = await this.parserUrl(url)
         const { fileName, filePath } = this.getDownloadFilePathAndName(name, outputformat)
@@ -121,6 +121,7 @@ class Oimi {
             filePath,
             percent: 0,
             message: '',
+            useragent,
         }
         this.missionList.push({ ...mission, ffmpegHelper })
         // eslint-disable-next-line no-useless-catch
@@ -128,6 +129,7 @@ class Oimi {
             await this.dbOperation.create(mission)
             await ffmpegHelper.setInputFile(realUrl)
             .setOutputFile(filePath)
+            .setUserAgent(useragent)
             .setThreads(this.THREAD)
             .setPreset(preset)
             .setOutputFormat(outputformat)

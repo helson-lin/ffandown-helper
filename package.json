@@ -1,6 +1,6 @@
 {
   "name": "oimi-helper",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "this is a helper for ffandown",
   "main": "src/index.js",
   "bin": "src/index.js",
