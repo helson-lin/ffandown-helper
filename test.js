@@ -3,17 +3,16 @@
  */
 const Oimi = require('./src/index')
 
-const oi = new Oimi('media')
+const oi = new Oimi('media', { verbose: false })
+
 oi.ready().then(() => {
     // eslint-disable-next-line max-len
-    const urls = 'http://devimages.apple.com/iphone/samples/bipbop/bipbopall.m3u8,http://devimages.apple.com/iphone/samples/bipbop/bipbopall.m3u8,http://devimages.apple.com/iphone/samples/bipbop/bipbopall.m3u8,http://devimages.apple.com/iphone/samples/bipbop/bipbopall.m3u8'
-    for (const url of urls.split(',')) {
-        oi.createDownloadMission({ name: 'wolai', url, outputformat: 'flv' }).then(() => {
-            console.log('download success')
-        }).catch(e =>
-            console.log('download failed:' + e),
-        )
-    }
+    // const urls = 'http://devimages.apple.com/iphone/samples/bipbop/bipbopall.m3u8,http://devimages.apple.com/iphone/samples/bipbop/bipbopall.m3u8,http://devimages.apple.com/iphone/samples/bipbop/bipbopall.m3u8,http://devimages.apple.com/iphone/samples/bipbop/bipbopall.m3u8'
+    oi.createDownloadMission({ name: 'wolai', url: 'http://devimages.apple.com/iphone/samples/bipbop/bipbopall.m3u8', outputformat: 'flv' }).then(() => {
+        console.log('download success')
+    }).catch(e =>
+        console.log('download failed:' + e),
+    )
     // setTimeout(async () => {
     //     const mission = oi.missionList[oi.missionList.length - 1]
     //     // mission && oi.deleteMission(mission.uid).then((res) => {

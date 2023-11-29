@@ -57,8 +57,8 @@ const tiktok = {
         try {
             const matchUrl = url.match(/https:\S+/)
             const roomId = await this.getRoomIdByShareUrl(matchUrl[0])
-            return await this.liveUrl(roomId)
-            // return res?.data?.data[0]?.stream_url.hls_pull_url_map;
+            const res = await this.liveUrl(roomId)
+            return res?.data?.data[0]?.stream_url.hls_pull_url_map
         } catch (e) {
             return null
         }

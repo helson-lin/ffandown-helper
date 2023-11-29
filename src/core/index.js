@@ -15,9 +15,11 @@ class FfmpegHelper {
     USER_AGENT
     THREADS
     M3U8_FILE
+    VERBOSE
     PROTOCOL_TYPE
     constructor (options) {
         if (options?.THREADS) this.THREADS = options.THREADS
+        if (options?.VERBOSE) log.level = options.VERBOSE ? 'verbose' : 'silent'
     }
 
     setUserAgent (USER_AGENT) {
@@ -229,11 +231,11 @@ class FfmpegHelper {
             this.ffmpegCmd = ffmpeg(this.M3U8_FILE)
             this.ffmpegCmd
             .on('error', (error) => {
-                // updatemission 
+                log.error('ffmpeg error:' + error)
                 reject(error)
             })
             .on('stderr', function (stderrLine) {
-                // log.warn('Stderr output: ' + stderrLine)
+                log.verbose('Stderr output:' + stderrLine)
             })
             .on('start', function (commandLine) {
                 log.warn('Spawned Ffmpeg with command: ' + commandLine)
@@ -251,8 +253,8 @@ class FfmpegHelper {
 
     // kill the process
     kill (signal = 'SIGKILL') {
-        // SIGSTOP 挂起下载任务
-        // SIGCONT 恢复下载任务
+        // SIGSTOP pause download
+        // SIGCONT resume download
         // SIGKILL 
         this.ffmpegCmd.kill(signal)
     }

@@ -6,26 +6,25 @@ const path = require('path')
 const os = require('os')
 const { v4: uuidv4 } = require('uuid')
 const throttle = require('lodash.throttle')
-const log = require('./utils/logger')
 require('dotenv').config()
 
 class Oimi {
     OUTPUT_DIR
+    thread
     missionList
-    THREAD
-    verbose
     parserPlugins
     helper
+    verbose
     dbOperation
 
-    constructor (OUTPUT_DIR, THREAD = true, verbose = false) {
+    constructor (OUTPUT_DIR, { thread = true, verbose = false }) {
         this.helper = helper
         this.dbOperation = dbOperation
         if (OUTPUT_DIR) this.OUTPUT_DIR = this.helper.ensurePath(OUTPUT_DIR)
         this.missionList = []
-        this.THREAD = THREAD && this.getCpuNum()
-        this.verbose = verbose
         this.parserPlugins = parserList
+        this.thread = thread && this.getCpuNum()
+        this.verbose = verbose
     }
     /**
      * @description before create mission need operation: download dependency and sync db data
@@ -108,15 +107,15 @@ class Oimi {
     async createDownloadMission (query) {
         const { name, url, outputformat, preset, useragent } = query
         if (!url) throw new Error('url is required')
-        const realUrl = await this.parserUrl(url)
+        // const realUrl = await this.parserUrl(url)
         const { fileName, filePath } = this.getDownloadFilePathAndName(name, outputformat)
         const uid = uuidv4()
-        const ffmpegHelper = new FfmpegHelper()
+        const ffmpegHelper = new FfmpegHelper({ VERBOSE: this.verbose })
 
         const mission = {
             uid,
             name: fileName,
-            url: realUrl,
+            url,
             status: '0',
             filePath,
             percent: 0,
@@ -127,10 +126,10 @@ class Oimi {
         // eslint-disable-next-line no-useless-catch
         try {
             await this.dbOperation.create(mission)
-            await ffmpegHelper.setInputFile(realUrl)
+            await ffmpegHelper.setInputFile(url)
             .setOutputFile(filePath)
             .setUserAgent(useragent)
-            .setThreads(this.THREAD)
+            .setThreads(this.thread)
             .setPreset(preset)
             .setOutputFormat(outputformat)
             .start(params => {
@@ -199,7 +198,7 @@ class Oimi {
                             this.missionList.push({ ...mission, ffmpegHelper })
                             await ffmpegHelper.setInputFile(mission.url)
                             .setOutputFile(mission.filePath)
-                            .setThreads(this.THREAD)
+                            .setThreads(this.thread)
                             .setTimeMark(mission.timemark)
                             .setOutputFormat(suffix)
                             .start(params => {
