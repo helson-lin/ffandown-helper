@@ -57,7 +57,7 @@ const SysDownloadDb = sequelize.define('sys_download', {
         type: Sequelize.STRING,
         allowNull: false,
         default: '0',
-        comment: '0/initial status; 1/ downloading status; 2/stopped status; 3/ finish status;',
+        comment: '0/initial status; 1/ downloading status; 2/stopped status; 3/ finish status;/ 4 error happed',
     },
     message: {
         type: Sequelize.STRING,

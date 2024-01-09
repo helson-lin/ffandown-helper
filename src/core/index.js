@@ -5,6 +5,7 @@
  */
 const ffmpeg = require('fluent-ffmpeg')
 const log = require('../utils/logger')
+const fetch = require('node-fetch')
 /**
   * A class to convert M3U8 to MP4
   * @class
@@ -32,10 +33,10 @@ class FfmpegHelper {
       * @param {String} filename M3U8 file path. You can use remote URL
       * @returns {Function}
       */
-    setInputFile (M3U8_FILE) {
+    async setInputFile (M3U8_FILE) {
         if (!M3U8_FILE) throw new Error('You must specify the M3U8 file address')
         this.M3U8_FILE = M3U8_FILE
-        this.PROTOCOL_TYPE = this.getProtocol(this.M3U8_FILE)
+        this.PROTOCOL_TYPE = await this.getProtocol(this.M3U8_FILE)
         return this
     }
 
@@ -90,12 +91,33 @@ class FfmpegHelper {
     }
 
     /**
+     *  check the download url file contentType
+     * @param {String} url
+     * @return {Promise<m3u8|unknown>} 
+     * @memberof FfmpegHelper
+     */
+    checkUrlContentType (url) {
+        return new Promise((resolve, reject) => {
+            fetch(url).then(async (res) => {
+                const headers = res.headers
+                const contentType = headers['content-type']
+                const data = await res.text()
+                if (['audio/x-mpegurl', 'application/vnd.apple.mpegURL'].includes(contentType) || data.replace(/\s+/g, '').startsWith('#EXTM3U')) {
+                    resolve('m3u8')
+                } else {
+                    resolve('unknown')
+                }
+            }).catch(e => resolve('unknown'))
+        })
+    }
+
+    /**
       * 获取地址协议
       * @date 3/30/2023 - 11:50:14 AM
       * @param {string} url
       * @returns {("live" | "m3u8" | "mp4" | "unknown")}
       */
-    getProtocol (url) {
+    async getProtocol (url) {
         switch (true) {
             case url.startsWith('rtmp://'):
             case url.startsWith('rtsp://'):
@@ -104,7 +126,8 @@ class FfmpegHelper {
             case url.indexOf('.flv') !== -1:
                 return 'm3u8'
             default:
-                return 'unknown'
+                // optimize protocal resource: url headers to get
+                return await this.checkUrlContentType(url)
         }
     }
 
@@ -156,7 +179,7 @@ class FfmpegHelper {
     monitorProcess (callback) {
         this.ffmpegCmd.ffprobe((err, data) => {
             if (err) {
-                // log.warn(`Error: ${err.message}`)
+                log.warn(`Error: ${err.message}`)
                 return
             }
             const toFixed = (val, precision = 1) => {
@@ -195,7 +218,6 @@ class FfmpegHelper {
             const { duration } = data.format
             this.ffmpegCmd
             .on('progress', (progress) => {
-                // TODO：速度优化
                 const percent = toFixed((progress.percent * 100) / 100)
                 const processedDuration = duration * (progress.percent / 100)
                 const remainingDuration = duration - processedDuration
@@ -217,16 +239,13 @@ class FfmpegHelper {
     }
 
     /**
-    * Starts the process
+    * Start download mission
     */
     start (listenProcess) {
         return new Promise((resolve, reject) => {
             if (!this.M3U8_FILE || !this.OUTPUT_FILE) {
                 reject(new Error('You must specify the input and the output files'))
                 return
-            }
-            if (this.PROTOCOL_TYPE === 'unknown') {
-                reject(new Error('the protocol is not supported, please specify the protocol type: m3u8 or rtmp、 rtsp'))
             }
             this.ffmpegCmd = ffmpeg(this.M3U8_FILE)
             this.ffmpegCmd
@@ -245,8 +264,11 @@ class FfmpegHelper {
             })
             this.setInputOption()
             this.setOutputOption()
+            // monitor downloading process
             this.monitorProcess(listenProcess)
-            this.ffmpegCmd.format(this.OUTPUTFORMAT || 'mp4') 
+            // set the transform file suffix
+            this.ffmpegCmd.format(this.OUTPUTFORMAT || 'mp4')
+            // start  mission
             this.ffmpegCmd.run()
         })
     }
@@ -256,7 +278,7 @@ class FfmpegHelper {
         // SIGSTOP pause download
         // SIGCONT resume download
         // SIGKILL 
-        this.ffmpegCmd.kill(signal)
+        this.ffmpegCmd?.kill(signal)
     }
 }
 module.exports = FfmpegHelper

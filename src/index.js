@@ -6,6 +6,7 @@ const path = require('path')
 const os = require('os')
 const { v4: uuidv4 } = require('uuid')
 const throttle = require('lodash.throttle')
+const log = require('./utils/logger')
 require('dotenv').config()
 
 class Oimi {
@@ -107,11 +108,9 @@ class Oimi {
     async createDownloadMission (query) {
         const { name, url, outputformat, preset, useragent } = query
         if (!url) throw new Error('url is required')
-        // const realUrl = await this.parserUrl(url)
         const { fileName, filePath } = this.getDownloadFilePathAndName(name, outputformat)
         const uid = uuidv4()
         const ffmpegHelper = new FfmpegHelper({ VERBOSE: this.verbose })
-
         const mission = {
             uid,
             name: fileName,
@@ -127,7 +126,11 @@ class Oimi {
         try {
             await this.dbOperation.create(mission)
             await ffmpegHelper.setInputFile(url)
-            .setOutputFile(filePath)
+            // check download url
+            if (ffmpegHelper.PROTOCOL_TYPE === 'unknown') {
+                throw new Error('this url is not supported to download')
+            }
+            await ffmpegHelper.setOutputFile(filePath)
             .setUserAgent(useragent)
             .setThreads(this.thread)
             .setPreset(preset)
@@ -135,14 +138,15 @@ class Oimi {
             .start(params => {
                 // 实时更新任务信息
                 const throttledFunction = throttle(
-                    this.updateMission.bind(this, uid, { ...mission, status: '1', ...params }),
-                    2000,
+                    this.updateMission.bind(this, uid, { ...mission, status: params.percent === 100 ? '3' : '1', ...params }),
+                    1000,
                 )
                 throttledFunction()
+            }).catch(e => {
+                // 下载中发生错误
+                this.updateMission(uid, { ...mission, status: '4', message: String(e) })
             })
-            // mission finish / 下载任务完成
-            this.updateMission(uid, mission, true)
-            return 'success download'
+            return 'mission created'
         } catch (e) {
             this.updateMission(uid, { ...mission, status: '4', message: String(e) })
             throw e
@@ -228,8 +232,14 @@ class Oimi {
     // 停止所有的任务
     async killAll () {
         for (const mission of this.missionList) {
-            mission.ffmpegHelper.kill('SIGSTOP')
-            await this.dbOperation.update(mission.uid, { ...mission, status: '2' })
+            mission.ffmpegHelper?.kill('SIGSTOP')
+            if (mission && mission.uid && mission.status === '1') {
+                try {
+                    await this.updateMission(mission.uid, { ...mission, status: '2' })
+                } catch (e) {
+                    log.warn(e.message)
+                }
+            }
         }
     }
 }
