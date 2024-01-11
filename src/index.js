@@ -125,7 +125,7 @@ class Oimi {
         // eslint-disable-next-line no-useless-catch
         try {
             await this.dbOperation.create(mission)
-            await ffmpegHelper.setInputFile(url)
+            await ffmpegHelper.setInputFile(url, useragent)
             // check download url
             if (ffmpegHelper.PROTOCOL_TYPE === 'unknown') {
                 throw new Error('this url is not supported to download')

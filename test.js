@@ -3,12 +3,17 @@
  */
 const Oimi = require('./src/index')
 
-const oi = new Oimi('media', { verbose: true })
+const oi = new Oimi('media', { verbose: false })
 
 oi.ready().then(() => {
     // eslint-disable-next-line max-len
     // const urls = 'http://devimages.apple.com/iphone/samples/bipbop/bipbopall.m3u8,http://devimages.apple.com/iphone/samples/bipbop/bipbopall.m3u8,http://devimages.apple.com/iphone/samples/bipbop/bipbopall.m3u8,http://devimages.apple.com/iphone/samples/bipbop/bipbopall.m3u8'
-    oi.createDownloadMission({ name: 'wolai', url: 'http://devimages.apple.com/iphone/samples/bipbop/bipbopall.m3u8,', outputformat: 'flv' }).then(() => {
+    oi.createDownloadMission({ 
+        name: 'wolai',
+        url: 'https://files.yuchenglw.com/index/m3u8/id/6890',
+        useragent: 'iPhone',
+        outputformat: 'mp4', 
+    }).then(() => {
         console.log('download success')
     }).catch(e =>
         console.log('download failed:' + e),

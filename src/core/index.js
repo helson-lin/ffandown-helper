@@ -33,10 +33,10 @@ class FfmpegHelper {
       * @param {String} filename M3U8 file path. You can use remote URL
       * @returns {Function}
       */
-    async setInputFile (M3U8_FILE) {
+    async setInputFile (M3U8_FILE, USER_AGENT) {
         if (!M3U8_FILE) throw new Error('You must specify the M3U8 file address')
         this.M3U8_FILE = M3U8_FILE
-        this.PROTOCOL_TYPE = await this.getProtocol(this.M3U8_FILE)
+        this.PROTOCOL_TYPE = await this.getProtocol(this.M3U8_FILE, USER_AGENT)
         return this
     }
 
@@ -96,9 +96,12 @@ class FfmpegHelper {
      * @return {Promise<m3u8|unknown>} 
      * @memberof FfmpegHelper
      */
-    checkUrlContentType (url) {
+    checkUrlContentType (url, USER_AGENT) {
         return new Promise((resolve, reject) => {
-            fetch(url).then(async (res) => {
+            // prefetch media need carry User-Agent
+            fetch(url, 
+                { headers: { 'User-Agent': USER_AGENT || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36' },
+                }).then(async (res) => {
                 const headers = res.headers
                 const contentType = headers['content-type']
                 const data = await res.text()
@@ -117,7 +120,7 @@ class FfmpegHelper {
       * @param {string} url
       * @returns {("live" | "m3u8" | "mp4" | "unknown")}
       */
-    async getProtocol (url) {
+    async getProtocol (url, USER_AGENT) {
         switch (true) {
             case url.startsWith('rtmp://'):
             case url.startsWith('rtsp://'):
@@ -126,14 +129,12 @@ class FfmpegHelper {
             case url.indexOf('.flv') !== -1:
                 return 'm3u8'
             default:
-                // optimize protocal resource: url headers to get
-                return await this.checkUrlContentType(url)
+                return await this.checkUrlContentType(url, USER_AGENT)
         }
     }
 
     setInputOption () {
-        // eslint-disable-next-line max-len
-        const USER_AGENT = this.USER_AGENT || 'Mozilla/5.0 (Macintosh; Intel Mac OS X 11_1_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.182 Safari/537.36'
+        const USER_AGENT = this.USER_AGENT || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36'
         const REFERER_RGX = /^(?<referer>http|https:\/\/(?:[a-zA-Z0-9-]+\.)+[a-zA-Z0-9-]+)(?::\d+)?\/[^ "]+$/u
         const match = this.M3U8_FILE.match(REFERER_RGX)
         const [referer] = match === null ? ['unknown'] : match.slice(1)
