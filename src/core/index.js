@@ -178,9 +178,11 @@ class FfmpegHelper {
     }
 
     monitorProcess (callback) {
-        this.ffmpegCmd.ffprobe((err, data) => {
+        const USER_AGENT = this.USER_AGENT || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36'
+        this.ffmpegCmd.ffprobe(['-user_agent',
+        `${USER_AGENT}`], (err, data) => {
             if (err) {
-                log.warn(`Error: ${err.message}`)
+                log.error(`Error: ${err.message}`)
                 return
             }
             const toFixed = (val, precision = 1) => {
@@ -258,7 +260,7 @@ class FfmpegHelper {
                 log.verbose('Stderr output:' + stderrLine)
             })
             .on('start', function (commandLine) {
-                log.warn('Spawned Ffmpeg with command: ' + commandLine)
+                log.info('Spawned Ffmpeg with command: ' + commandLine)
             })
             .on('end', () => {
                 resolve()
