@@ -3,14 +3,14 @@
  */
 const Oimi = require('./src/index')
 
-const oi = new Oimi('media', { verbose: true })
+const oi = new Oimi('media', { verbose: false })
 
 oi.ready().then(() => {
     // eslint-disable-next-line max-len
     // const urls = 'http://devimages.apple.com/iphone/samples/bipbop/bipbopall.m3u8,http://devimages.apple.com/iphone/samples/bipbop/bipbopall.m3u8,http://devimages.apple.com/iphone/samples/bipbop/bipbopall.m3u8,http://devimages.apple.com/iphone/samples/bipbop/bipbopall.m3u8'
     oi.createDownloadMission({ 
         name: '123',
-        url: 'https://files.yuchenglw.com/index/m3u8/id/26241',
+        url: '',
         useragent: 'iPhone',
         outputformat: 'mp4', 
     }).then(() => {

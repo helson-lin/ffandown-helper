@@ -218,18 +218,37 @@ class FfmpegHelper {
                     return `${formattedSpeed} Kb/s`
                 }
             }
+            const timemarkToSeconds = (timemark) => {
+                // 通过冒号将时间戳拆分为时、分、秒和小数秒
+                const [hours, minutes, seconds, decimals] = timemark.split(':')
+                
+                // 将时、分、秒转换为整数
+                const hoursInSeconds = parseInt(hours, 10) * 3600
+                const minutesInSeconds = parseInt(minutes, 10) * 60
+                const secondsInSeconds = parseInt(seconds, 10)
+                
+                // 将小数秒转换为浮点数
+                const decimalsInSeconds = parseFloat(`0.${decimals}`)
+                
+                // 计算总秒数
+                const totalSeconds = hoursInSeconds + minutesInSeconds + secondsInSeconds + decimalsInSeconds
+                
+                return totalSeconds
+            }
             const { duration } = data.format
             this.ffmpegCmd
             .on('progress', (progress) => {
-                const percent = toFixed((progress.percent * 100) / 100)
-                const processedDuration = duration * (progress.percent / 100)
-                const remainingDuration = duration - processedDuration
+                // todo: fixed duration undefined situation
+                let percent
+                if (!progress.percent) {
+                    percent = toFixed((timemarkToSeconds(progress.timemark) / duration) * 100)
+                } else {
+                    percent = toFixed((progress.percent * 100) / 100)
+                }
                 const currentMbs = formatSpeed(progress.currentKbps)
                 if (callback && typeof callback === 'function') {
                     const params = {
                         percent: percent >= 100 ? 100 : percent,
-                        process: toFixed(processedDuration),
-                        remaining: toFixed(remainingDuration),
                         currentMbs,
                         timemark: progress.timemark,
                         targetSize: formatFileSize(progress.targetSize),

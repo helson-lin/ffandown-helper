@@ -88,16 +88,20 @@ class Oimi {
     async updateMission (uid, info, finish = false) {
         const oldMission = this.missionList.find(i => i.uid === uid)
         const { percent, currentMbs, timemark, targetSize, status, name, message } = info
-        if (oldMission) {
-            if (!finish && oldMission.status !== '3') {
-                oldMission.status = status || '1'
-                await this.dbOperation.update(uid, { name, percent, speed: currentMbs, timemark, size: targetSize, message, status: status || '1' })
+        try {
+            if (oldMission) {
+                if (!finish && oldMission.status !== '3') {
+                    oldMission.status = status || '1'
+                    await this.dbOperation.update(uid, { name, percent, speed: currentMbs, timemark, size: targetSize, message, status: status || '1' })
+                } else {
+                    oldMission.status = '3'
+                    await this.dbOperation.update(uid, { status: '3' })
+                }
             } else {
-                oldMission.status = '3'
-                await this.dbOperation.update(uid, { status: '3' })
+                await this.dbOperation.update(uid, { name, percent, speed: currentMbs, timemark, size: targetSize, message, status: status || '1' })
             }
-        } else {
-            await this.dbOperation.update(uid, { name, percent, speed: currentMbs, timemark, size: targetSize, message, status: status || '1' })
+        } catch (e) {
+            log.error(e)
         }
     }
 
