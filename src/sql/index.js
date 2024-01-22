@@ -57,6 +57,20 @@ const dbOperation = {
             return Promise.reject(e)
         }
     },
+    async queryByPage (pageNumber, pageSize, sortField = 'crt_tm', sortOrder = 'ASC') {
+        try {
+            const allMissions = await SysDownloadDb.findAll({
+                limit: pageSize,
+                offset: (pageNumber - 1) * pageSize,
+                order: [
+                    [sortField, sortOrder], // 添加了排序参数，默认按照'id'字段进行升序排序
+                ],
+            })
+            return allMissions
+        } catch (e) {
+            return Promise.reject(e)
+        }   
+    },
 }
 
 module.exports = dbOperation

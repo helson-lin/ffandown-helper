@@ -5,19 +5,21 @@ const Oimi = require('./src/index')
 
 const oi = new Oimi('media', { verbose: false })
 
-oi.ready().then(() => {
+oi.ready().then(async () => {
     // eslint-disable-next-line max-len
     // const urls = 'http://devimages.apple.com/iphone/samples/bipbop/bipbopall.m3u8,http://devimages.apple.com/iphone/samples/bipbop/bipbopall.m3u8,http://devimages.apple.com/iphone/samples/bipbop/bipbopall.m3u8,http://devimages.apple.com/iphone/samples/bipbop/bipbopall.m3u8'
-    oi.createDownloadMission({ 
-        name: '123',
-        url: '',
-        useragent: 'iPhone',
-        outputformat: 'mp4', 
-    }).then(() => {
-        console.log('download success')
-    }).catch(e =>
-        console.log('download failed:' + e),
-    )
+    // oi.createDownloadMission({ 
+    //     name: '123',
+    //     url: 'https://files.yuchenglw.com/index/m3u8/id/4718',
+    //     useragent: 'iPhone',
+    //     outputformat: 'mp4', 
+    // }).then(() => {
+    //     console.log('download success')
+    // }).catch(e =>
+    //     console.log('download failed:' + e),
+    // )
+    const all = await oi.dbOperation.queryByPage(2, 10, 'crt_tm', 'desc')
+    console.log(all.map(i => i.name))
     // setTimeout(async () => {
     //     const mission = oi.missionList[oi.missionList.length - 1]
     //     // mission && oi.deleteMission(mission.uid).then((res) => {
