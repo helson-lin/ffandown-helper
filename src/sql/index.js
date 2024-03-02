@@ -1,4 +1,5 @@
 const { SysDownloadDb, sequelize } = require('./entity')
+const { Op } = require('sequelize')
 const dbOperation = {
     async sync () {
         try {
@@ -33,7 +34,6 @@ const dbOperation = {
     async update (uid, body) {
         try {
             const mission = body
-            if (!mission.crt_tm) mission.crt_tm = new Date().toLocaleString()
             if (!mission.upd_tm) mission.upd_tm = new Date().toLocaleString()
             const download = await SysDownloadDb.update(mission, { where: { uid } })
             return Promise.resolve(download)
@@ -57,19 +57,38 @@ const dbOperation = {
             return Promise.reject(e)
         }
     },
-    async queryByPage (pageNumber, pageSize, sortField = 'crt_tm', sortOrder = 'ASC') {
+    async queryByPage ({ pageNumber = 1, pageSize = 1, sortField = 'crt_tm', sortOrder = 'ASC', status = '1' }) {
         try {
-            const allMissions = await SysDownloadDb.findAll({
+            const statusList = String(status || '1').split(',').map(item => Number(item.trim()))
+            const offset = (pageNumber - 1) * pageSize
+            const options = {
                 limit: pageSize,
-                offset: (pageNumber - 1) * pageSize,
-                order: [
-                    [sortField, sortOrder], // 添加了排序参数，默认按照'id'字段进行升序排序
-                ],
-            })
+                offset,
+                order: [[sortField, sortOrder]],
+                where: { 
+                    status: { [Op.in]: statusList },
+                },
+            }
+            const allMissions = await SysDownloadDb.findAll(options)
             return allMissions
         } catch (e) {
             return Promise.reject(e)
-        }   
+        }
+    },
+    // 获取等待中的下载任务
+    async  queryMissionByType (type = 'waiting') {
+        const statusMap = {
+            waiting: ['5'],
+            downloading: ['0', '1', '2'],
+            finished: ['3', '4'],
+            needResume: ['0', '1', '2', '5'],
+        }
+        try {
+            const allMissions = await SysDownloadDb.findAll({ where: { status: { [Op.in]: statusMap[type] } }, order: [['crt_tm', 'ASC']] })
+            return Promise.resolve(allMissions)
+        } catch (e) {
+            return Promise.reject(e)
+        }
     },
 }
 

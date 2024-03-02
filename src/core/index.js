@@ -138,14 +138,10 @@ class FfmpegHelper {
         const REFERER_RGX = /^(?<referer>http|https:\/\/(?:[a-zA-Z0-9-]+\.)+[a-zA-Z0-9-]+)(?::\d+)?\/[^ "]+$/u
         const match = this.M3U8_FILE.match(REFERER_RGX)
         const [referer] = match === null ? ['unknown'] : match.slice(1)
-        this.ffmpegCmd.inputOptions(
-            [
-                '-user_agent',
-                `${USER_AGENT}`,
-                '-referer',
-                `${referer}/`,
-            ],
-        )
+        const options = []
+        if (USER_AGENT) options.push('-user_agent',`${USER_AGENT}`)
+        if (referer !== 'unknown') options.push('-referer',`${referer}`)
+        options.length && this.ffmpegCmd.inputOptions(options)
     }
 
     setOutputOption () {
