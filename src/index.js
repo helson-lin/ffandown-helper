@@ -187,13 +187,13 @@ class Oimi {
                 )
                 throttledFunction()
             }).catch(e => {
-                console.log(e, '下载错误');
+                console.log(e, '下载错误')
                 // 下载中发生错误
                 this.updateMission(uid, { ...mission, status: '4', message: String(e) })
             })
             return 'mission created'
         } catch (e) {
-            console.log(e, '下载错误2');
+            console.log(e, '下载错误2')
             this.updateMission(uid, { ...mission, status: '4', message: String(e) })
             throw e
         }
@@ -229,13 +229,6 @@ class Oimi {
         }
     }
     
-    /**
-    * @description delete download mission
-    * @param {string} uid
-    */
-    async deleteMission (uid) {
-    }
-
     /**
     * @description pause download mission
     * @param {string} uid

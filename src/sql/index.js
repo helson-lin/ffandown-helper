@@ -69,7 +69,7 @@ const dbOperation = {
                     status: { [Op.in]: statusList },
                 },
             }
-            const allMissions = await SysDownloadDb.findAll(options)
+            const allMissions = await SysDownloadDb.findAndCountAll(options)
             return allMissions
         } catch (e) {
             return Promise.reject(e)
@@ -86,6 +86,18 @@ const dbOperation = {
         try {
             const allMissions = await SysDownloadDb.findAll({ where: { status: { [Op.in]: statusMap[type] } }, order: [['crt_tm', 'ASC']] })
             return Promise.resolve(allMissions)
+        } catch (e) {
+            return Promise.reject(e)
+        }
+    },
+    // 批量删除下载任务
+    async batchDelete (uids) {
+        try {
+            return await SysDownloadDb.destroy({
+                where: {
+                    uid: uids,
+                },
+            })
         } catch (e) {
             return Promise.reject(e)
         }
