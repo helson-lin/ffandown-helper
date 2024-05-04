@@ -4,9 +4,9 @@ const dbOperation = {
     async sync () {
         try {
             await sequelize.sync()
-            console.log('Database synced successfully')
+            console.log('[ffandown] Database synced successfully')
         } catch (e) {
-            console.log('Database synced failed:' + String(e).trim())
+            console.log('[ffandown] Database synced failed:' + String(e).trim())
         }
     },
     /**

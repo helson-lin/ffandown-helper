@@ -76,10 +76,18 @@ class Oimi {
      * @param {string} name 
      * @returns {string} path 
      */
-    getDownloadFilePathAndName (name, outputformat) {
+    getDownloadFilePathAndName (name, dir, outputformat, enableTimeSuffix = false) {
         const tm = String(new Date().getTime())
-        let fileName = name ? `${name}_${tm}` : tm
-        const filePath = path.join(this.OUTPUT_DIR ?? process.cwd(), fileName + `.${outputformat || 'mp4'}`)
+        let fileName = name ? name.split('/').pop() : tm
+        const dirPath = path.join(this.OUTPUT_DIR ?? process.cwd(), dir ?? '')
+        this.helper.ensureMediaDir(dirPath)
+        const getFileName = () => {
+            const fileFormat = outputformat || 'mp4'
+            if (name && enableTimeSuffix) return name + '_' + tm + `.${fileFormat}`
+            if (name && !enableTimeSuffix) return name + `.${fileFormat}`
+            return tm + `.${fileFormat}`
+        }
+        const filePath = path.join(dirPath, getFileName())
         return { fileName, filePath }
     }
     /**
@@ -204,9 +212,11 @@ class Oimi {
      * @param {object} query url: download url, name: download mission name outputformat
      */
     async createDownloadMission (query) {
-        const { name, url, outputformat, preset, useragent } = query
+        let enableTimeSuffix = false
+        const { name, url, outputformat, preset, useragent, dir } = query
+        if (query?.enableTimeSuffix !== undefined && typeof query?.enableTimeSuffix === 'boolean') enableTimeSuffix = query.enableTimeSuffix
         if (!url) throw new Error('url is required')
-        const { fileName, filePath } = this.getDownloadFilePathAndName(name, outputformat)
+        const { fileName, filePath } = this.getDownloadFilePathAndName(name, dir, outputformat, enableTimeSuffix)
         const mission = { 
             uid: uuidv4(),
             name: fileName,

@@ -105,11 +105,11 @@ const Helper = {
     setEnv (type, path) {
         if (type === 'ffmpeg') {
             ffmpeg.setFfmpegPath(path)
-            console.log('[ffandown] ffmpeg: 环境变量设置成功')
+            console.log('[ffandown] ffmpeg: env variable is set successfully')
         }
         if (type === 'ffprobe') {
             ffmpeg.setFfprobePath(path)
-            console.log('[ffandown] ffprobe: 环境变量设置成功')
+            console.log('[ffandown] ffprobe: env variable is set successfully')
         }
     },
     /**
@@ -190,6 +190,7 @@ const Helper = {
         fse.ensureDirSync(relPath)
         return relPath
     },
+    ensureMediaDir: (_path) => fse.ensureDirSync(_path),
     getUrlFileExt (url) {
         const parsedUrl = new URL(`http://${url}`)
         return parsedUrl.pathname.split('.').pop()

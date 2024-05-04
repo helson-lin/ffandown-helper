@@ -103,12 +103,19 @@ class FfmpegHelper {
                 { headers: { 'User-Agent': USER_AGENT || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36' },
                 }).then(async (res) => {
                 const headers = res.headers
-                const contentType = headers['content-type']
+                const contentType = headers['content-type'] || headers.get('content-type')
                 const data = await res.text()
                 if (['audio/x-mpegurl', 'application/vnd.apple.mpegURL'].includes(contentType) || data.replace(/\s+/g, '').startsWith('#EXTM3U')) {
                     resolve('m3u8')
                 } else {
-                    resolve('unknown')
+                    switch (contentType) {
+                        case 'video/mp4':
+                            resolve('mp4')
+                            break
+                        default:
+                            resolve('unknown')
+                            break
+                    }
                 }
             }).catch(e => resolve('unknown'))
         })
@@ -139,8 +146,8 @@ class FfmpegHelper {
         const match = this.M3U8_FILE.match(REFERER_RGX)
         const [referer] = match === null ? ['unknown'] : match.slice(1)
         const options = []
-        if (USER_AGENT) options.push('-user_agent',`${USER_AGENT}`)
-        if (referer !== 'unknown') options.push('-referer',`${referer}`)
+        if (USER_AGENT) options.push('-user_agent', `${USER_AGENT}`)
+        if (referer !== 'unknown') options.push('-referer', `${referer}`)
         options.length && this.ffmpegCmd.inputOptions(options)
     }
 
@@ -156,20 +163,13 @@ class FfmpegHelper {
         }
         this.ffmpegCmd.outputOptions(`-preset ${this.PRESET || 'veryfast'}`)
         const liveProtocol = this.PROTOCOL_TYPE
-        if (liveProtocol === 'live') {
-            this.ffmpegCmd
-            .outputOptions('-c:v copy')
-            .outputOptions('-c:a copy')
-            // .outputOptions('-c:a aac')
-            // .outputOptions('-b:a 128k')
-            .output(this.OUTPUT_FILE)
-        } else if (liveProtocol === 'm3u8') {
-            this.ffmpegCmd
-            .outputOptions('-c:v copy')
-            .outputOptions('-c:a copy')
-            // .outputOptions('-c:v copy')
-            // .outputOptions('-bsf:a aac_adtstoasc')
-            .output(this.OUTPUT_FILE)
+        switch (liveProtocol) {
+            default:
+                this.ffmpegCmd
+                .outputOptions('-c:v copy')
+                .outputOptions('-c:a copy')
+                .output(this.OUTPUT_FILE)
+                break
         }
     }
 
@@ -275,7 +275,8 @@ class FfmpegHelper {
                 log.verbose('Stderr output:' + stderrLine)
             })
             .on('start', function (commandLine) {
-                log.info('Spawned Ffmpeg with command: ' + commandLine)
+                log.info('FFmpeg command: ' + commandLine)
+                log.verbose('FFmpeg command:', commandLine)
             })
             .on('end', () => {
                 resolve()
