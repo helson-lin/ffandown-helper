@@ -1,3 +1,4 @@
+/* eslint-disable camelcase */
 /**
  * @description M3U8 to MP4 Converter
  * @author Furkan Inanc, Helson Lin
@@ -18,6 +19,7 @@ class FfmpegHelper {
     M3U8_FILE
     VERBOSE
     PROTOCOL_TYPE
+    duration
     constructor (options) {
         if (options?.THREADS) this.THREADS = options.THREADS
         if (options?.VERBOSE) log.level = options.VERBOSE ? 'verbose' : 'silent'
@@ -33,10 +35,9 @@ class FfmpegHelper {
       * @param {String} filename M3U8 file path. You can use remote URL
       * @returns {Function}
       */
-    async setInputFile (M3U8_FILE, USER_AGENT) {
+    setInputFile (M3U8_FILE, USER_AGENT) {
         if (!M3U8_FILE) throw new Error('You must specify the M3U8 file address')
         this.M3U8_FILE = M3U8_FILE
-        this.PROTOCOL_TYPE = await this.getProtocol(this.M3U8_FILE, USER_AGENT)
         return this
     }
 
@@ -97,27 +98,25 @@ class FfmpegHelper {
      * @memberof FfmpegHelper
      */
     checkUrlContentType (url, USER_AGENT) {
+        // 既然可以通过ffmpeg.ffprobe获取到视频的格式和时长，那么可以通过这个方法来判断视频的格式
         return new Promise((resolve, reject) => {
             // prefetch media need carry User-Agent
-            fetch(url, 
-                { headers: { 'User-Agent': USER_AGENT || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36' },
-                }).then(async (res) => {
-                const headers = res.headers
-                const contentType = headers['content-type'] || headers.get('content-type')
-                const data = await res.text()
-                if (['audio/x-mpegurl', 'application/vnd.apple.mpegURL'].includes(contentType) || data.replace(/\s+/g, '').startsWith('#EXTM3U')) {
-                    resolve('m3u8')
+            ffmpeg.ffprobe(url, ['-user_agent', `${USER_AGENT}`], (err, metadata) => {
+                if (err) {
+                    resolve('unknown')
                 } else {
-                    switch (contentType) {
-                        case 'video/mp4':
-                            resolve('mp4')
-                            break
-                        default:
-                            resolve('unknown')
-                            break
+                    const { format_name, duration } = metadata?.format
+                    this.duration = duration ?? 0
+                    log.verbose('format_name:' + format_name + ',duration:' + duration)
+                    if (format_name === 'hls') {
+                        resolve('m3u8')
+                    } else if (format_name.split(',').includes('mp4')) {
+                        resolve('mp4')
+                    } else {
+                        resolve('unknown')
                     }
                 }
-            }).catch(e => resolve('unknown'))
+            })
         })
     }
 
@@ -138,6 +137,10 @@ class FfmpegHelper {
             default:
                 return await this.checkUrlContentType(url, USER_AGENT)
         }
+    }
+
+    async getMetadata () {
+        this.PROTOCOL_TYPE = await this.getProtocol(this.M3U8_FILE, this.USER_AGENT)
     }
 
     setInputOption () {
@@ -162,8 +165,15 @@ class FfmpegHelper {
             this.ffmpegCmd.seekInput(this.TIMEMARK)
         }
         this.ffmpegCmd.outputOptions(`-preset ${this.PRESET || 'veryfast'}`)
+
         const liveProtocol = this.PROTOCOL_TYPE
         switch (liveProtocol) {
+            case 'live':
+                this.ffmpegCmd
+                .outputOptions('-c:v copy')
+                .outputOptions('-c:a copy')
+                .output(this.OUTPUT_FILE)
+                break
             default:
                 this.ffmpegCmd
                 .outputOptions('-c:v copy')
@@ -171,89 +181,86 @@ class FfmpegHelper {
                 .output(this.OUTPUT_FILE)
                 break
         }
+        this.ffmpegCmd.outputOptions([
+            '-map 0',
+            '-f segment',
+            '-segment_time 60',
+            '-segment_format_options movflags=+faststart',
+            '-reset_timestamps 1',
+        ])
     }
 
     monitorProcess (callback) {
-        const USER_AGENT = this.USER_AGENT || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36'
-        this.ffmpegCmd.ffprobe(['-user_agent',
-        `${USER_AGENT}`], (err, data) => {
-            if (err) {
-                log.error(`Error: ${err.message}`)
-                return
-            }
-            const toFixed = (val, precision = 1) => {
-                const multiplier = 10 ** precision
-                return Math.round(val * multiplier) / multiplier
-            }
-            const formatFileSize = (fileSizeKb) => {
-                const fileSizeMb = fileSizeKb / 1024
-                const fileSizeGb = fileSizeMb / 1024
+        const toFixed = (val, precision = 1) => {
+            const multiplier = 10 ** precision
+            return Math.round(val * multiplier) / multiplier
+        }
+        const formatFileSize = (fileSizeKb) => {
+            const fileSizeMb = fileSizeKb / 1024
+            const fileSizeGb = fileSizeMb / 1024
 
-                if (fileSizeGb >= 1) {
-                    const speedGbps = fileSizeGb.toFixed(2)
-                    return `${speedGbps} GB`
-                } else if (fileSizeMb >= 1) {
-                    const speedMbps = fileSizeMb.toFixed(2)
-                    return `${speedMbps} MB`
-                } else {
-                    const speedKbps = fileSizeKb.toFixed(2)
-                    return `${speedKbps} KB`
-                }
+            if (fileSizeGb >= 1) {
+                const speedGbps = fileSizeGb.toFixed(2)
+                return `${speedGbps} GB`
+            } else if (fileSizeMb >= 1) {
+                const speedMbps = fileSizeMb.toFixed(2)
+                return `${speedMbps} MB`
+            } else {
+                const speedKbps = fileSizeKb.toFixed(2)
+                return `${speedKbps} KB`
             }
-            const formatSpeed = (speedKbps) => {
-                const speedMbps = speedKbps / 1000
-                const speedGbps = speedMbps / 1000
-                if (speedGbps >= 1) {
-                    const formattedSpeed = speedGbps.toFixed(2)
-                    return `${formattedSpeed} Gb/s`
-                } else if (speedMbps >= 1) {
-                    const formattedSpeed = speedMbps.toFixed(2)
-                    return `${formattedSpeed} Mb/s`
-                } else {
-                    const formattedSpeed = speedKbps.toFixed(2)
-                    return `${formattedSpeed} Kb/s`
-                }
+        }
+        const formatSpeed = (speedKbps) => {
+            const speedMbps = speedKbps / 1000
+            const speedGbps = speedMbps / 1000
+            if (speedGbps >= 1) {
+                const formattedSpeed = speedGbps.toFixed(2)
+                return `${formattedSpeed} Gb/s`
+            } else if (speedMbps >= 1) {
+                const formattedSpeed = speedMbps.toFixed(2)
+                return `${formattedSpeed} Mb/s`
+            } else {
+                const formattedSpeed = speedKbps.toFixed(2)
+                return `${formattedSpeed} Kb/s`
             }
-            const timemarkToSeconds = (timemark) => {
-                // 通过冒号将时间戳拆分为时、分、秒和小数秒
-                const [hours, minutes, seconds, decimals] = timemark.split(':')
-                
-                // 将时、分、秒转换为整数
-                const hoursInSeconds = parseInt(hours, 10) * 3600
-                const minutesInSeconds = parseInt(minutes, 10) * 60
-                const secondsInSeconds = parseInt(seconds, 10)
-                
-                // 将小数秒转换为浮点数
-                const decimalsInSeconds = parseFloat(`0.${decimals}`)
-                
-                // 计算总秒数
-                const totalSeconds = hoursInSeconds + minutesInSeconds + secondsInSeconds + decimalsInSeconds
-                
-                return totalSeconds
+        }
+        const timemarkToSeconds = (timemark) => {
+            // 通过冒号将时间戳拆分为时、分、秒和小数秒
+            const [hours, minutes, seconds, decimals] = timemark.split(':')
+
+            // 将时、分、秒转换为整数
+            const hoursInSeconds = parseInt(hours, 10) * 3600
+            const minutesInSeconds = parseInt(minutes, 10) * 60
+            const secondsInSeconds = parseInt(seconds, 10)
+
+            // 将小数秒转换为浮点数
+            const decimalsInSeconds = parseFloat(`0.${decimals}`)
+
+            // 计算总秒数
+            const totalSeconds = hoursInSeconds + minutesInSeconds + secondsInSeconds + decimalsInSeconds
+
+            return totalSeconds
+        }
+        this.ffmpegCmd
+        .on('progress', (progress) => {
+            let percent
+            if (!progress.percent) {
+                percent = toFixed((timemarkToSeconds(progress.timemark) / this.duration) * 100)
+            } else {
+                percent = toFixed((progress.percent * 100) / 100)
             }
-            const { duration } = data.format
-            this.ffmpegCmd
-            .on('progress', (progress) => {
-                // todo: fixed duration undefined situation
-                let percent
-                if (!progress.percent) {
-                    percent = toFixed((timemarkToSeconds(progress.timemark) / duration) * 100)
-                } else {
-                    percent = toFixed((progress.percent * 100) / 100)
+            const currentMbs = formatSpeed(progress.currentKbps)
+            if (callback && typeof callback === 'function') {
+                const params = {
+                    percent: percent >= 100 ? 100 : percent,
+                    currentMbs,
+                    timemark: progress.timemark,
+                    targetSize: formatFileSize(progress.targetSize),
                 }
-                const currentMbs = formatSpeed(progress.currentKbps)
-                if (callback && typeof callback === 'function') {
-                    const params = {
-                        percent: percent >= 100 ? 100 : percent,
-                        currentMbs,
-                        timemark: progress.timemark,
-                        targetSize: formatFileSize(progress.targetSize),
-                    }
-                    callback(params)
-                }
-            })
-            .run()
+                callback(params)
+            }
         })
+        .run()
     }
 
     /**
@@ -263,41 +270,41 @@ class FfmpegHelper {
         return new Promise((resolve, reject) => {
             if (!this.M3U8_FILE || !this.OUTPUT_FILE) {
                 reject(new Error('You must specify the input and the output files'))
-                return
+            } else {
+                this.ffmpegCmd = ffmpeg(this.M3U8_FILE)
+                this.setInputOption()
+                // get video meta
+                this.getMetadata().then(() => {
+                    // setOutputOption is dependen on protocol type
+                    this.setOutputOption()
+                    // set the transform file suffix
+                    this.ffmpegCmd.format(this.OUTPUTFORMAT || 'mp4')
+                    // monitor downloading process
+                    this.monitorProcess(listenProcess)
+                })
+                this.ffmpegCmd
+                .on('error', (error) => {
+                    reject(error)
+                })
+                .on('stderr', function (stderrLine) {
+                    log.verbose('Stderr output:' + stderrLine)
+                })
+                .on('start', function (commandLine) {
+                    log.info('FFmpeg command: ' + commandLine)
+                })
+                .on('end', () => {
+                    resolve('')
+                })
             }
-            this.ffmpegCmd = ffmpeg(this.M3U8_FILE)
-            this.ffmpegCmd
-            .on('error', (error) => {
-                log.error('ffmpeg error:' + error)
-                reject(error)
-            })
-            .on('stderr', function (stderrLine) {
-                log.verbose('Stderr output:' + stderrLine)
-            })
-            .on('start', function (commandLine) {
-                log.info('FFmpeg command: ' + commandLine)
-                log.verbose('FFmpeg command:', commandLine)
-            })
-            .on('end', () => {
-                resolve()
-            })
-            this.setInputOption()
-            this.setOutputOption()
-            // monitor downloading process
-            this.monitorProcess(listenProcess)
-            // set the transform file suffix
-            this.ffmpegCmd.format(this.OUTPUTFORMAT || 'mp4')
-            // start  mission
-            this.ffmpegCmd.run()
         })
     }
 
-    // kill the process
-    kill (signal = 'SIGKILL') {
-        // SIGSTOP pause download
-        // SIGCONT resume download
-        // SIGKILL 
-        this.ffmpegCmd?.kill(signal)
+    kill (signal) {
+        // SIGINT 中止录制：除了该方式中断其他方式中断的视频无法播放
+        // SIGSTOP 挂起ffmpeg
+        // SIGCONT 恢复下载
+        // SIGKILL 杀死进程
+        this.ffmpegCmd.kill(signal)
     }
 }
 module.exports = FfmpegHelper

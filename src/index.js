@@ -112,6 +112,7 @@ class Oimi {
                     oldMission.status = status
                     const updateOption = { status: oldMission.status }
                     if (status === '3') updateOption.percent = '100'
+                    if (status === '4') updateOption.message = message
                     await this.dbOperation.update(uid, updateOption)
                     // 从missionList内移除任务
                     this.missionList = this.missionList.filter(i => i.uid !== uid)
@@ -122,7 +123,6 @@ class Oimi {
             }
             // finish为True,表示有下载任务完成，那么可以添加新的下载任务到任务管理内, 或者 status为4/3的时候去添加下载任务
             // 如果用户手动继续下载任务
-            // TODO: get new download mission from waiting download mission in database
             if (finish || ['4', '3'].includes(status)) this.insertNewMission()
         } catch (e) {
             log.error(e)
@@ -180,9 +180,9 @@ class Oimi {
         const uid = mission.uid
         try {
             if (isNeedInsert) await this.dbOperation.create(mission)
-            await ffmpegHelper.setInputFile(mission.url, mission.useragent)
+            ffmpegHelper.setInputFile(mission.url, mission.useragent)
             if (ffmpegHelper.PROTOCOL_TYPE === 'unknown') throw new Error('this url is not supported to download')
-            await ffmpegHelper.setOutputFile(mission.filePath)
+            ffmpegHelper.setOutputFile(mission.filePath)
             .setUserAgent(mission.useragent)
             .setThreads(this.thread)
             .setPreset(preset)
@@ -194,16 +194,17 @@ class Oimi {
                     300,
                 )
                 throttledFunction()
+            }).then(() => {
+                // todo: create download mission support dowloaded callback
             }).catch(e => {
-                console.log(e, '下载错误')
                 // 下载中发生错误
                 this.updateMission(uid, { ...mission, status: '4', message: String(e) })
+                log.warn('downloading error:', e)
             })
             return 'mission created'
         } catch (e) {
-            console.log(e, '下载错误2')
+            log.warn('downloading error:', e)
             this.updateMission(uid, { ...mission, status: '4', message: String(e) })
-            throw e
         }
     }
 
@@ -261,7 +262,6 @@ class Oimi {
     * @param {string} uid
     */
     resumeDownload (uid) {
-        // TODO： 手动恢复下载任务，需要校验当前的任务进行的数量嘛
         return new Promise((resolve, reject) => {
             (async () => {
                 const missionInList = this.missionList.find(i => i.uid === uid)
@@ -310,7 +310,7 @@ class Oimi {
     */
     async killAll () {
         for (const mission of this.missionList) {
-            mission.ffmpegHelper?.kill('SIGSTOP')
+            mission.ffmpegHelper?.kill('SIGINT')
             if (mission && mission.uid && mission.status === '1') {
                 try {
                     await this.updateMission(mission.uid, { ...mission, status: '2' })
