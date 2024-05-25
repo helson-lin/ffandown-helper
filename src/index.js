@@ -304,13 +304,55 @@ class Oimi {
             })()
         })
     }   
+    
+    /**
+     * @description delete download mission
+     * @param {string} uid
+     */
+    deleteDownload (uid) {
+        return new Promise((resolve, reject) => {
+            try {
+                // 存在正在进行中的任务，那么需要将任务暂停并且删除掉
+                const missionIndex = this.missionList.findIndex(i => i.uid === uid)
+                if (missionIndex !== -1) {
+                    const mission = this.missionList[missionIndex]
+                    mission.FfmpegHelper.kill('SIGKILL')
+                    // 删除任务
+                    this.missionList.splice(missionIndex, 1)
+                    // 数据库内删除
+                    this.dbOperation.delete(uid).then(() => resolve()).catch(e => reject(e))
+                }
+            } catch (e) {
+                reject(e)
+            }
+        })
+    }
+
+    /**
+     * @description stop mission download,  mission can be play event though it's not finished download
+     * @param {strig} uid 
+     */
+    stopDownload (uid) {
+        return new Promise((resolve, reject) => {
+            try {
+                const missionIndex = this.missionList.findIndex(i => i.uid === uid)
+                if (missionIndex !== -1) {
+                    const mission = this.missionList[missionIndex]
+                    mission.FfmpegHelper.kill('SIGINT')
+                    this.updateMission(uid, { ...mission, status: '3' })
+                }
+            } catch (e) {
+                reject(e)
+            }
+        })
+    }
 
     /**
     * @description kill all download mission
     */
     async killAll () {
         for (const mission of this.missionList) {
-            mission.ffmpegHelper?.kill('SIGINT')
+            mission.ffmpegHelper?.kill('SIGKILL')
             if (mission && mission.uid && mission.status === '1') {
                 try {
                     await this.updateMission(mission.uid, { ...mission, status: '2' })
