@@ -22,16 +22,13 @@ oi.ready().then(async () => {
 
     oi.createDownloadMission({ 
         name: 'tmp23',
-        url: 'https://d1--cn-gotcha204-3.bilivideo.com/live-bvc/633222/live_35461776_3508648/index.m3u8?expires=1716386285&len=0&oi=0x2408824404202e7d248ecad1298921dc&pt=web&qn=0&trid=10077044a78ec13e4d63b8c83f1e4c04de43&sigparams=cdn,expires,len,oi,pt,qn,trid&cdn=cn-gotcha204&sign=5fc89f65fd355ad90ddc5af39016ea09&sk=5948758c28e5566e8ee5996d8c78f5e2&p2p_type=1&sl=1&free_type=0&mid=58422276&pp=rtmp&source=onetier&trace=20&site=e2b68fe95a62792e35e47a712a54f71d&qp=de_0&order=1',
+        url: 'http://vjs.zencdn.net/v/oceans.mp4',
         useragent: 'iPhone',
         outputformat: 'mp4', 
         dir: '/live',
         enableTimeSuffix: false,
     }, () => {}).then(() => {
         console.log('download success')
-        setTimeout(() => {
-            oi.killAll()
-        }, 15000)
     }).catch(e =>
         console.log('download failed:' + e),
     )

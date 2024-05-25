@@ -196,6 +196,7 @@ class Oimi {
                 throttledFunction()
             }).then(() => {
                 // todo: create download mission support dowloaded callback
+                this.updateMission(uid, { ...mission, percent: 100 }, true)
             }).catch(e => {
                 // 下载中发生错误
                 this.updateMission(uid, { ...mission, status: '4', message: String(e) })
@@ -320,8 +321,8 @@ class Oimi {
                     // 删除任务
                     this.missionList.splice(missionIndex, 1)
                     // 数据库内删除
-                    this.dbOperation.delete(uid).then(() => resolve()).catch(e => reject(e))
                 }
+                this.dbOperation.delete(uid).then(() => resolve()).catch(e => reject(e))
             } catch (e) {
                 reject(e)
             }

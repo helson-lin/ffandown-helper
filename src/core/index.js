@@ -284,6 +284,7 @@ class FfmpegHelper {
                 })
                 this.ffmpegCmd
                 .on('error', (error) => {
+                    console.log('ffmpeg error happed', error)
                     reject(error)
                 })
                 .on('stderr', function (stderrLine) {
