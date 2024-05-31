@@ -6,7 +6,6 @@
  */
 const ffmpeg = require('fluent-ffmpeg')
 const log = require('../utils/logger')
-const fetch = require('node-fetch')
 /**
   * A class to convert M3U8 to MP4
   * @class
@@ -65,8 +64,7 @@ class FfmpegHelper {
     }
 
     /**
-     * Description set video preset
-     * @date 2023/11/13 - 16:03:29
+     * set video preset
      * @param {String} preset video preset
      */
     setPreset (preset) {
@@ -122,7 +120,6 @@ class FfmpegHelper {
 
     /**
       * 获取地址协议
-      * @date 3/30/2023 - 11:50:14 AM
       * @param {string} url
       * @returns {("live" | "m3u8" | "mp4" | "unknown")}
       */
@@ -139,10 +136,17 @@ class FfmpegHelper {
         }
     }
 
+    /**
+     * Gets the metadata of the input file.
+     * @returns {Promise<void>} A promise that resolves when the metadata is retrieved.
+     */
     async getMetadata () {
         this.PROTOCOL_TYPE = await this.getProtocol(this.M3U8_FILE, this.USER_AGENT)
     }
 
+    /**
+   * Sets the input options for ffmpeg.
+   */
     setInputOption () {
         const USER_AGENT = this.USER_AGENT || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36'
         const REFERER_RGX = /^(?<referer>http|https:\/\/(?:[a-zA-Z0-9-]+\.)+[a-zA-Z0-9-]+)(?::\d+)?\/[^ "]+$/u
@@ -154,6 +158,9 @@ class FfmpegHelper {
         options.length && this.ffmpegCmd.inputOptions(options)
     }
 
+    /**
+   * Sets the output options for ffmpeg.
+   */
     setOutputOption () {
         if (this.THREADS) {
             this.ffmpegCmd.outputOptions([
@@ -181,15 +188,12 @@ class FfmpegHelper {
                 .output(this.OUTPUT_FILE)
                 break
         }
-        this.ffmpegCmd.outputOptions([
-            '-map 0',
-            '-f segment',
-            '-segment_time 60',
-            '-segment_format_options movflags=+faststart',
-            '-reset_timestamps 1',
-        ])
     }
 
+    /**
+   * Monitors the conversion process and reports progress.
+   * @param {Function} callback The callback function to call with progress updates.
+   */
     monitorProcess (callback) {
         const toFixed = (val, precision = 1) => {
             const multiplier = 10 ** precision
@@ -214,14 +218,11 @@ class FfmpegHelper {
             const speedMbps = speedKbps / 1000
             const speedGbps = speedMbps / 1000
             if (speedGbps >= 1) {
-                const formattedSpeed = speedGbps.toFixed(2)
-                return `${formattedSpeed} Gb/s`
+                return `${speedGbps.toFixed(2)} Gb/s`
             } else if (speedMbps >= 1) {
-                const formattedSpeed = speedMbps.toFixed(2)
-                return `${formattedSpeed} Mb/s`
+                return `${speedMbps.toFixed(2)} Mb/s`
             } else {
-                const formattedSpeed = speedKbps.toFixed(2)
-                return `${formattedSpeed} Kb/s`
+                return `${speedKbps.toFixed(2)} Kb/s`
             }
         }
         const timemarkToSeconds = (timemark) => {
@@ -241,15 +242,15 @@ class FfmpegHelper {
 
             return totalSeconds
         }
+        let startTime = Date.now()
+        let downloadedBytes = 0
         this.ffmpegCmd
         .on('progress', (progress) => {
-            let percent
-            if (!progress.percent) {
-                percent = toFixed((timemarkToSeconds(progress.timemark) / this.duration) * 100)
-            } else {
-                percent = toFixed((progress.percent * 100) / 100)
-            }
-            const currentMbs = formatSpeed(progress.currentKbps)
+            downloadedBytes = progress.targetSize
+            const elapsedSeconds = (Date.now() - startTime) / 1000
+            const averageSpeedKbps = downloadedBytes / elapsedSeconds
+            const currentMbs = formatSpeed(averageSpeedKbps)
+            let percent = progress.percent ? toFixed(progress.percent * 100) / 100 : toFixed((timemarkToSeconds(progress.timemark) / this.duration) * 100)
             if (callback && typeof callback === 'function') {
                 const params = {
                     percent: percent >= 100 ? 100 : percent,
@@ -300,6 +301,10 @@ class FfmpegHelper {
         })
     }
 
+    /**
+   * Kills the ffmpeg process.
+   * @param {string} signal The signal to send to the process.
+   */
     kill (signal) {
         // SIGINT 中止录制：除了该方式中断其他方式中断的视频无法播放
         // SIGSTOP 挂起ffmpeg

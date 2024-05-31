@@ -3,7 +3,13 @@
  */
 const Oimi = require('./src/index')
 
-const oi = new Oimi('media', { verbose: true, maxDownloadNum: 1 })
+const oi = new Oimi('media', { 
+    verbose: true, 
+    maxDownloadNum: 1, 
+    eventCallback: (data) => {
+        console.log('eventCallback', data)
+    },
+})
 
 oi.ready().then(async () => {
     // eslint-disable-next-line max-len
@@ -21,14 +27,16 @@ oi.ready().then(async () => {
     // )
 
     oi.createDownloadMission({ 
-        name: 'tmp23',
-        url: 'http://vjs.zencdn.net/v/oceans.mp4',
-        useragent: 'iPhone',
+        name: '12212312321',
+        url: 'https://cn-jstz-cu-01-03.bilivideo.com/upgcxcode/05/72/1565667205/1565667205-1-100027.m4s?e=ig8euxZM2rNcNbdlhoNvNC8BqJIzNbfqXBvEqxTEto8BTrNvN0GvT90W5JZMkX_YN0MvXg8gNEV4NC8xNEV4N03eN0B5tZlqNxTEto8BTrNvNeZVuJ10Kj_g2UB02J0mN0B5tZlqNCNEto8BTrNvNC7MTX502C8f2jmMQJ6mqF2fka1mqx6gqj0eN0B599M=&uipk=5&nbs=1&deadline=1717166276&gen=playurlv2&os=bcache&oi=0&trid=00006a509e7c2d404c7692400594e9e7f2d6u&mid=58422276&platform=pc&og=cos&upsig=3d928321d417a20b2446a18fe2f48b94&uparams=e,uipk,nbs,deadline,gen,os,oi,trid,mid,platform,og&cdnid=71703&bvc=vod&nettype=0&orderid=0,3&buvid=9FC90015-7294-8367-5283-7142D9DA318F20544infoc&build=0&f=u_0_0&agrr=0&bw=91472&logo=80000000',
         outputformat: 'mp4', 
         dir: '/live',
-        enableTimeSuffix: false,
+        enableTimeSuffix: true,
     }, () => {}).then(() => {
         console.log('download success')
+        setTimeout(() => {
+            oi.killAll()
+        }, 300000)
     }).catch(e =>
         console.log('download failed:' + e),
     )

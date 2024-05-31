@@ -18,8 +18,9 @@ class Oimi {
     helper
     verbose
     dbOperation
-
-    constructor (OUTPUT_DIR, { thread = true, verbose = false, maxDownloadNum = 5 }) {
+    // event callback
+    eventCallback
+    constructor (OUTPUT_DIR, { thread = true, verbose = false, maxDownloadNum = 5, eventCallback }) {
         this.helper = helper
         this.dbOperation = dbOperation
         if (OUTPUT_DIR) this.OUTPUT_DIR = this.helper.ensurePath(OUTPUT_DIR)
@@ -28,6 +29,7 @@ class Oimi {
         this.thread = thread && this.getCpuNum()
         this.maxDownloadNum = maxDownloadNum || 5
         this.verbose = verbose
+        this.eventCallback = eventCallback
     }
     /**
      * @description before create mission need operation: download dependency and sync db data
@@ -38,7 +40,6 @@ class Oimi {
         await this.helper.downloadDependency()
         await this.dbOperation.sync()
         this.initalMission()
-        // TODO：检查是否存在等待中的下载任务，直接开始下载
     }
 
     /**
@@ -106,6 +107,7 @@ class Oimi {
                 // 如果下载没有完成，并且当前下载任务的状态不是完成状态, 更新任务的状态
                 if (!finish && !['3', '4'].includes(status)) {
                     oldMission.status = status || '1' // 更新任务的状态：如果状态丢失那么默认为初始化状态
+                    console.log(currentMbs, 'speed')
                     await this.dbOperation.update(uid, { name, percent, speed: currentMbs, timemark, size: targetSize, message, status: status || '1' })
                 } else {
                     // 更新任务状态为下载完成(下载失败)：只需要更新下载状态
@@ -145,8 +147,8 @@ class Oimi {
      * @returns {*}
      */
     async initalMission () {
-        const allMissions = await this.dbOperation.queryMissionByType('needResume')
-        // 继续恢复下载任务
+        const allMissions = await this.dbOperation.queryMissionByType('needResume')    
+        // 继续恢复下载任务     
         const missions = allMissions.slice(0, this.maxDownloadNum)
         for (let mission of missions) {
             const ffmpegHelper = new FfmpegHelper({ VERBOSE: this.verbose })
@@ -191,21 +193,24 @@ class Oimi {
                 // 实时更新任务信息
                 const throttledFunction = throttle(
                     this.updateMission.bind(this, uid, { ...mission, status: params.percent >= 100 ? '3' : '1', ...params }),
-                    300,
+                    1000,
                 )
                 throttledFunction()
             }).then(() => {
                 // todo: create download mission support dowloaded callback
-                this.updateMission(uid, { ...mission, percent: 100 }, true)
+                if (this.eventCallback && typeof this.eventCallback === 'function') this.eventCallback({ name: mission.name, status: '3' })
+                this.updateMission(uid, { ...mission, percent: 100, status: '3' }, true)
             }).catch(e => {
                 // 下载中发生错误
+                if (this.eventCallback && typeof this.eventCallback === 'function') this.eventCallback({ name: mission.name, status: '4', message: String(e) })
                 this.updateMission(uid, { ...mission, status: '4', message: String(e) })
                 log.warn('downloading error:', e)
             })
             return 'mission created'
         } catch (e) {
-            log.warn('downloading error:', e)
+            if (this.eventCallback && typeof this.eventCallback === 'function') this.eventCallback({ name: mission.name, status: '4', message: String(e) })
             this.updateMission(uid, { ...mission, status: '4', message: String(e) })
+            log.warn('downloading error:', e)
         }
     }
 
@@ -289,12 +294,21 @@ class Oimi {
                                         ...mission, 
                                         status: '1', 
                                         ...params }),
-                                    2000,
+                                    1000,
                                 )
                                 throttledFunction()
+                            }).then(() => {
+                                // todo: create download mission support dowloaded callback
+                                if (this.eventCallback && typeof this.eventCallback === 'function') this.eventCallback({ name: mission.name, status: '3' })
+                                this.updateMission(uid, { ...mission, percent: 100, status: '3' }, true)
+                            }).catch(e => {
+                                // 下载中发生错误
+                                if (this.eventCallback && typeof this.eventCallback === 'function') this.eventCallback({ name: mission.name, status: '4', message: String(e) })
+                                this.updateMission(uid, { ...mission, status: '4', message: String(e) })
+                                log.warn('downloading error:', e)
                             })
-                            this.updateMission(uid, mission, true)
                         } catch (e) {
+                            if (this.eventCallback && typeof this.eventCallback === 'function') this.eventCallback({ name: mission.name, status: '4', message: String(e) })
                             this.updateMission(uid, { ...mission, status: '4', message: String(e) })
                             reject(e)
                         }
@@ -317,7 +331,7 @@ class Oimi {
                 const missionIndex = this.missionList.findIndex(i => i.uid === uid)
                 if (missionIndex !== -1) {
                     const mission = this.missionList[missionIndex]
-                    mission.FfmpegHelper.kill('SIGKILL')
+                    mission.ffmpegHelper.kill('SIGKILL')
                     // 删除任务
                     this.missionList.splice(missionIndex, 1)
                     // 数据库内删除
@@ -339,7 +353,7 @@ class Oimi {
                 const missionIndex = this.missionList.findIndex(i => i.uid === uid)
                 if (missionIndex !== -1) {
                     const mission = this.missionList[missionIndex]
-                    mission.FfmpegHelper.kill('SIGINT')
+                    mission.ffmpegHelper.kill('SIGINT')
                     this.updateMission(uid, { ...mission, status: '3' })
                 }
             } catch (e) {
