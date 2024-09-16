@@ -31,6 +31,14 @@ class Oimi {
         this.verbose = verbose
         this.eventCallback = eventCallback
     }
+
+    // register event callback
+    registerEventCallback (eventCallback) {
+        if (eventCallback && typeof eventCallback === 'function') {
+            this.eventCallback = eventCallback
+        }
+    }
+
     /**
      * @description before create mission need operation: download dependency and sync db data
      * @returns void
@@ -238,11 +246,13 @@ class Oimi {
         if (this.missionList.length >= this.maxDownloadNum) {
             mission.status = '5' // set mission status is waiting
             await this.insertWaitingMission(mission)
+            return 'mission created'
         } else {
             // contiune download
             const ffmpegHelper = new FfmpegHelper({ VERBOSE: this.verbose })
             this.missionList.push({ ...mission, ffmpegHelper })
             await this.startDownload({ ffmpegHelper, mission, outputformat, preset })
+            return 'mission created'
         }
     }
     

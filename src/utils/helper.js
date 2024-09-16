@@ -105,12 +105,11 @@ const Helper = {
     setEnv (type, path) {
         if (type === 'ffmpeg') {
             ffmpeg.setFfmpegPath(path)
-            console.log('[ffandown] ffmpeg: env variable is set successfully')
         }
         if (type === 'ffprobe') {
             ffmpeg.setFfprobePath(path)
-            console.log('[ffandown] ffprobe: env variable is set successfully')
         }
+        console.log(`\x1b[32m[ffandown] ${type}: env variable is set successfully\x1b[0m`)
     },
     /**
      * is need download
@@ -147,7 +146,17 @@ const Helper = {
      */
     async downloadAndSetEnv (url, libPath, type) {
         try {
-            await download(url, 'lib', { extract: true })
+            // download ffmpeg or ffprobe dependency
+            const ORA = await import('ora')
+            const ora = ORA?.default
+            const spinner = ora(`downloading ${type}...`).start()
+            try {
+                await download(url, 'lib', { extract: true })
+                spinner.succeed(`downloaded ${type}`)
+            } catch (error) {
+                spinner.fail(`download ${type} failed`)
+                throw error
+            }
             this.setEnv(type, libPath)
             await this.chmod(libPath)
         } catch (e) {
