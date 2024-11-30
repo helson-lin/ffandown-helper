@@ -1,11 +1,10 @@
 const FfmpegHelper = require('./core/index')
 const helper = require('./utils/helper')
 const dbOperation = require('./sql/index')
-const parserList = require('./parser/index')
 const path = require('path')
 const os = require('os')
 const { v4: uuidv4 } = require('uuid')
-const throttle = require('lodash.throttle')
+const debounce = require('lodash.debounce')
 const log = require('./utils/logger')
 require('dotenv').config()
 
@@ -25,14 +24,18 @@ class Oimi {
         this.dbOperation = dbOperation
         if (OUTPUT_DIR) this.OUTPUT_DIR = this.helper.ensurePath(OUTPUT_DIR)
         this.missionList = []
-        this.parserPlugins = parserList
+        this.parserPlugins = []
         this.thread = thread && this.getCpuNum()
         this.maxDownloadNum = maxDownloadNum || 5
         this.verbose = verbose
         this.eventCallback = eventCallback
     }
 
-    // register event callback
+
+    /**
+     * @description register event callback | 注册回调事件
+     * @param {function} eventCallback
+     */
     registerEventCallback (eventCallback) {
         if (eventCallback && typeof eventCallback === 'function') {
             this.eventCallback = eventCallback
@@ -40,7 +43,23 @@ class Oimi {
     }
 
     /**
-     * @description before create mission need operation: download dependency and sync db data
+      * @description callback mission status | 回调下载任务的状态
+     * @param {object} data 
+     * @returns {void} 
+     */
+    callbackStatus (data) {
+        if (this.eventCallback && typeof this.eventCallback === 'function') {
+            const KEY_NEED_BACK = ['uid', 'name', 'url', 'status', 'percent', 'filePath', 'message', 'useragent', 'from'];
+            const callbackData = KEY_NEED_BACK.reduce((pre, key) => {
+                if (data.hasOwnProperty(key)) pre[key] = data[key];
+                return pre;
+            }, {});
+            callbackData?.uid && this.eventCallback(callbackData);
+        }
+    }
+
+    /**
+     * @description before create mission need operation: download dependency and sync db data ｜ 准备工作
      * @returns void
      */
 
@@ -115,7 +134,6 @@ class Oimi {
                 // 如果下载没有完成，并且当前下载任务的状态不是完成状态, 更新任务的状态
                 if (!finish && !['3', '4'].includes(status)) {
                     oldMission.status = status || '1' // 更新任务的状态：如果状态丢失那么默认为初始化状态
-                    console.log(currentMbs, 'speed')
                     await this.dbOperation.update(uid, { name, percent, speed: currentMbs, timemark, size: targetSize, message, status: status || '1' })
                 } else {
                     // 更新任务状态为下载完成(下载失败)：只需要更新下载状态
@@ -199,24 +217,24 @@ class Oimi {
             .setOutputFormat(outputformat)
             .start(params => {
                 // 实时更新任务信息
-                const throttledFunction = throttle(
+                const debounceFunc = debounce(
                     this.updateMission.bind(this, uid, { ...mission, status: params.percent >= 100 ? '3' : '1', ...params }),
-                    1000,
+                    2000,
                 )
-                throttledFunction()
+                debounceFunc()
             }).then(() => {
                 // todo: create download mission support dowloaded callback
-                if (this.eventCallback && typeof this.eventCallback === 'function') this.eventCallback({ name: mission.name, status: '3' })
+                this.callbackStatus({ ...mission, status: '3', from: '1' })
                 this.updateMission(uid, { ...mission, percent: 100, status: '3' }, true)
             }).catch(e => {
                 // 下载中发生错误
-                if (this.eventCallback && typeof this.eventCallback === 'function') this.eventCallback({ name: mission.name, status: '4', message: String(e) })
+                this.callbackStatus({ ...mission, status: '4', message: String(e) })
                 this.updateMission(uid, { ...mission, status: '4', message: String(e) })
                 log.warn('downloading error:', e)
             })
             return 'mission created'
         } catch (e) {
-            if (this.eventCallback && typeof this.eventCallback === 'function') this.eventCallback({ name: mission.name, status: '4', message: String(e) })
+            this.callbackStatus({ ...mission, status: '4', message: String(e) })
             this.updateMission(uid, { ...mission, status: '4', message: String(e) })
             log.warn('downloading error:', e)
         }
@@ -299,26 +317,26 @@ class Oimi {
                             .setOutputFormat(suffix)
                             .start(params => {
                                 resolve('resume download')
-                                const throttledFunction = throttle(
+                                const debounceFunc = debounce(
                                     this.updateMission.bind(this, uid, { 
                                         ...mission, 
                                         status: '1', 
                                         ...params }),
                                     1000,
                                 )
-                                throttledFunction()
+                                debounceFunc()
                             }).then(() => {
                                 // todo: create download mission support dowloaded callback
-                                if (this.eventCallback && typeof this.eventCallback === 'function') this.eventCallback({ name: mission.name, status: '3' })
+                                this.callbackStatus({ ...mission, status: '3', from: '2' })
                                 this.updateMission(uid, { ...mission, percent: 100, status: '3' }, true)
                             }).catch(e => {
                                 // 下载中发生错误
-                                if (this.eventCallback && typeof this.eventCallback === 'function') this.eventCallback({ name: mission.name, status: '4', message: String(e) })
+                                this.callbackStatus({ ...mission, status: '4', message: String(e) })
                                 this.updateMission(uid, { ...mission, status: '4', message: String(e) })
                                 log.warn('downloading error:', e)
                             })
                         } catch (e) {
-                            if (this.eventCallback && typeof this.eventCallback === 'function') this.eventCallback({ name: mission.name, status: '4', message: String(e) })
+                            this.callbackStatus({ ...mission, status: '4', message: String(e) })
                             this.updateMission(uid, { ...mission, status: '4', message: String(e) })
                             reject(e)
                         }

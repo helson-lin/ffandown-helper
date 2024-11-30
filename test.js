@@ -17,7 +17,7 @@ oi.ready().then(async () => {
     // const urls = 'http://devimages.apple.com/iphone/samples/bipbop/bipbopall.m3u8'
     oi.createDownloadMission({ 
         name: 'movie',
-        url: 'http://devimages.apple.com/iphone/samples/bipbop/bipbopall23.m3u8',
+        url: 'http://devimages.apple.com/iphone/samples/bipbop/bipbopall.m3u8',
         useragent: 'iPhone',
         outputformat: 'mp4', 
         dir: '/live',
