@@ -22,6 +22,7 @@ class FfmpegHelper {
     constructor (options) {
         if (options?.THREADS) this.THREADS = options.THREADS
         if (options?.VERBOSE) log.level = options.VERBOSE ? 'verbose' : 'silent'
+        this.downloadedBytes = 0
     }
 
     setUserAgent (USER_AGENT) {
@@ -175,12 +176,6 @@ class FfmpegHelper {
 
         const liveProtocol = this.PROTOCOL_TYPE
         switch (liveProtocol) {
-            case 'live':
-                this.ffmpegCmd
-                .outputOptions('-c:v copy')
-                .outputOptions('-c:a copy')
-                .output(this.OUTPUT_FILE)
-                break
             default:
                 this.ffmpegCmd
                 .outputOptions('-c:v copy')
@@ -190,11 +185,7 @@ class FfmpegHelper {
         }
     }
 
-    /**
-   * Monitors the conversion process and reports progress.
-   * @param {Function} callback The callback function to call with progress updates.
-   */
-    monitorProcess (callback) {
+    handlerProcess (progress, callback) {
         const toFixed = (val, precision = 1) => {
             const multiplier = 10 ** precision
             return Math.round(val * multiplier) / multiplier
@@ -242,26 +233,24 @@ class FfmpegHelper {
 
             return totalSeconds
         }
-        let startTime = Date.now()
-        let downloadedBytes = 0
-        this.ffmpegCmd
-        .on('progress', (progress) => {
-            downloadedBytes = progress.targetSize
-            const elapsedSeconds = (Date.now() - startTime) / 1000
-            const averageSpeedKbps = downloadedBytes / elapsedSeconds
-            const currentMbs = formatSpeed(averageSpeedKbps)
-            let percent = progress.percent ? toFixed(progress.percent * 100) / 100 : toFixed((timemarkToSeconds(progress.timemark) / this.duration) * 100)
-            if (callback && typeof callback === 'function') {
-                const params = {
-                    percent: percent >= 100 ? 100 : percent,
-                    currentMbs,
-                    timemark: progress.timemark,
-                    targetSize: formatFileSize(progress.targetSize),
-                }
-                callback(params)
+        // let startTime = Date.now()
+        this.downloadedBytes = progress.targetSize
+        const elapsedSeconds = (Date.now() - this.startTime) / 1000
+        const averageSpeedKbps = this.downloadedBytes / elapsedSeconds
+        const currentMbs = formatSpeed(averageSpeedKbps)
+        let percent = progress.percent ? toFixed(progress.percent * 100) / 100 : toFixed((timemarkToSeconds(progress.timemark) / this.duration) * 100)
+        if (Number.isNaN(percent)) this.PROTOCOL_TYPE = 'live'
+        if (callback && typeof callback === 'function') {
+            const params = {
+                percent: percent >= 100 ? 100 : percent,
+                currentMbs,
+                timemark: progress.timemark,
+                targetSize: formatFileSize(progress.targetSize),
+                // percent is NaN , when the link is live
+                isLive: Number.isNaN(percent),
             }
-        })
-        .run()
+            callback(params)
+        }
     }
 
     /**
@@ -269,36 +258,46 @@ class FfmpegHelper {
     */
     start (listenProcess) {
         return new Promise((resolve, reject) => {
-            if (!this.M3U8_FILE || !this.OUTPUT_FILE) {
-                reject(new Error('You must specify the input and the output files'))
-            } else {
-                this.ffmpegCmd = ffmpeg(this.M3U8_FILE)
-                this.setInputOption()
-                // get video meta
-                this.getMetadata().then(() => {
+            const _this = this;
+            (async () => {
+                if (!_this.M3U8_FILE || !_this.OUTPUT_FILE) {
+                    reject(new Error('You must specify the input and the output files'))
+                } else {
+                    await _this.getMetadata()
+                    _this.ffmpegCmd = ffmpeg(_this.M3U8_FILE)
+                    _this.setInputOption()
                     // setOutputOption is dependen on protocol type
-                    this.setOutputOption()
+                    await _this.setOutputOption()
                     // set the transform file suffix
-                    this.ffmpegCmd.format(this.OUTPUTFORMAT || 'mp4')
-                    // monitor downloading process
-                    this.monitorProcess(listenProcess)
-                })
-                this.ffmpegCmd
-                .on('error', (error) => {
-                    console.log('ffmpeg error happed:', error)
-                    log.verbose('ffmpeg error happed:' + error)
-                    reject(error)
-                })
-                .on('stderr', function (stderrLine) {
-                    log.verbose('Stderr output:' + stderrLine)
-                })
-                .on('start', function (commandLine) {
-                    log.info('FFmpeg command: ' + commandLine)
-                })
-                .on('end', () => {
-                    resolve('')
-                })
-            }
+                    _this.ffmpegCmd.format(_this.OUTPUTFORMAT || 'mp4')
+                    _this.ffmpegCmd
+                    .on('progress', (progress) => {
+                        _this.handlerProcess(progress, listenProcess)
+                    })
+                    .on('stderr', function (stderrLine) {
+                        log.verbose('Stderr output:' + stderrLine)
+                    })
+                    .on('start', function (commandLine) {
+                        _this.startTime = Date.now()
+                        log.verbose('FFmpeg command: ' + commandLine)
+                        console.log('commandLine', commandLine)
+                        // setTimeout(function () {
+                        //     // _this.ffmpegCmd.kill('SIGSTOP')
+                        //     _this.kill('SIGSTOP')
+                        //     console.warn('sendKill message')
+                        // }, 9000)
+                    })
+                    .on('error', (error) => {
+                        log.verbose('ffmpeg error happed:' + error)
+                        reject(error)
+                    })
+                    .on('end', () => {
+                        console.log('finished')
+                        resolve('')
+                    })
+                    .run()
+                }
+            })()
         })
     }
 
@@ -311,7 +310,17 @@ class FfmpegHelper {
         // SIGSTOP 挂起ffmpeg
         // SIGCONT 恢复下载
         // SIGKILL 杀死进程
-        this.ffmpegCmd.kill(signal)
+        console.log('kill with signal: ', signal, this.ffmpegCmd?.ffmpegProc?.pid)
+        try {
+            if (signal) this.ffmpegCmd.ffmpegProc.kill(signal)
+            else if (this.PROTOCOL_TYPE === 'live') {
+                this.ffmpegCmd.ffmpegProc.kill('SIGINT')
+            } else {
+                this.ffmpegCmd.ffmpegProc.kill('SIGKILL')
+            }
+        } catch (e) {
+            console.log(e, 'error')
+        } 
     }
 }
 module.exports = FfmpegHelper
