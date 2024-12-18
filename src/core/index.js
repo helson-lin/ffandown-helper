@@ -246,6 +246,7 @@ class FfmpegHelper {
                 currentMbs,
                 timemark: progress.timemark,
                 targetSize: formatFileSize(progress.targetSize),
+                protocolType: Number.isNaN(percent) ? 'live' : 'video',
                 // percent is NaN , when the link is live
                 isLive: Number.isNaN(percent),
             }

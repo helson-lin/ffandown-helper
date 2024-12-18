@@ -53,7 +53,7 @@ const SysDownloadDb = sequelize.define('sys_download', {
         type: Sequelize.STRING,
         allowNull: true,
     },
-    perset: {
+    preset: {
         type: Sequelize.STRING,
         allowNull: true,
         default: 'medium',
