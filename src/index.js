@@ -1,11 +1,9 @@
 const FfmpegHelper = require('./core/index')
 const helper = require('./utils/helper')
 const dbOperation = require('./sql/index')
-const parserList = require('./parser/index')
 const path = require('path')
 const os = require('os')
 const { v4: uuidv4 } = require('uuid')
-const throttle = require('lodash.throttle')
 const log = require('./utils/logger')
 require('dotenv').config()
 
@@ -19,20 +17,28 @@ class Oimi {
     verbose
     dbOperation
     // event callback
+    stopMission
+    resumeMission
     eventCallback
     constructor (OUTPUT_DIR, { thread = true, verbose = false, maxDownloadNum = 5, eventCallback }) {
         this.helper = helper
         this.dbOperation = dbOperation
         if (OUTPUT_DIR) this.OUTPUT_DIR = this.helper.ensurePath(OUTPUT_DIR)
         this.missionList = []
-        this.parserPlugins = parserList
+        // 终止的任务
+        this.stopMission = []
+        this.resumeMission = []
+        this.parserPlugins = []
         this.thread = thread && this.getCpuNum()
         this.maxDownloadNum = maxDownloadNum || 5
         this.verbose = verbose
         this.eventCallback = eventCallback
     }
 
-    // register event callback
+    /**
+     * @description register event callback | 注册回调事件
+     * @param {function} eventCallback
+     */
     registerEventCallback (eventCallback) {
         if (eventCallback && typeof eventCallback === 'function') {
             this.eventCallback = eventCallback
@@ -40,14 +46,25 @@ class Oimi {
     }
 
     /**
-     * @description before create mission need operation: download dependency and sync db data
+      * @description callback mission status | 回调下载任务的状态
+     * @param {object} data 
+     * @returns {void} 
+     */
+    callbackStatus (data) {
+        if (this.eventCallback && typeof this.eventCallback === 'function') {
+            this.eventCallback(data)
+        }
+    }
+
+    /**
+     * @description before create mission need operation: download dependency and sync db data ｜ 准备工作
      * @returns void
      */
 
     async ready () {
         await this.helper.downloadDependency()
         await this.dbOperation.sync()
-        this.initalMission()
+        await this.initMission()
     }
 
     /**
@@ -60,38 +77,20 @@ class Oimi {
     }
 
     /**
-     * @description parser special url to the url can be download by ffmpeg
-     * @param {string} url  
-     * @returns {string} 
+     * @description get file download path by name
+     * @param {string} name
+     * @param {string} dir
+     * @param {string} outputFormat
+     * @param {boolean} enableTimeSuffix
+     * @returns {{fileName: string, filePath: string}} path
      */
-
-    async parserUrl (url) {
-        if (!url) {
-            throw new Error('url is required')
-        }
-        const parserPlugin = this.parserPlugins.find((parser) => parser.handler.match(url))
-        if (!parserPlugin) {
-            return url
-        }
-        const parseredInfo = await parserPlugin.handler.parser(url)
-        return {
-            name: parserPlugin.name,
-            data: parseredInfo,
-        }
-    }
-
-    /**
-      * @description get file download path by name
-     * @param {string} name 
-     * @returns {string} path 
-     */
-    getDownloadFilePathAndName (name, dir, outputformat, enableTimeSuffix = false) {
+    getDownloadFilePathAndName (name, dir, outputFormat, enableTimeSuffix = false) {
         const tm = String(new Date().getTime())
         let fileName = name ? name.split('/').pop() : tm
         const dirPath = path.join(this.OUTPUT_DIR ?? process.cwd(), dir ?? '')
         this.helper.ensureMediaDir(dirPath)
         const getFileName = () => {
-            const fileFormat = outputformat || 'mp4'
+            const fileFormat = outputFormat || 'mp4'
             if (name && enableTimeSuffix) return name + '_' + tm + `.${fileFormat}`
             if (name && !enableTimeSuffix) return name + `.${fileFormat}`
             return tm + `.${fileFormat}`
@@ -109,38 +108,57 @@ class Oimi {
     async updateMission (uid, info, finish = false) {
         const oldMission = this.missionList.find(i => i.uid === uid)
         const { percent, currentMbs, timemark, targetSize, status, name, message } = info
+        // status 任务更新为的状态
         try {
             // 下载任务管理内存在下载任务
             if (oldMission) {
                 // 如果下载没有完成，并且当前下载任务的状态不是完成状态, 更新任务的状态
-                if (!finish && !['3', '4'].includes(status)) {
+                // 2. 停止下载 3. 完成下载 4 错误导致下载失败
+                // 更新的状态值不是完成状态（初始化、下载中、等待中）并且更新的状态为（初始化、下载中、等待中）
+                if (!finish && !['2', '3', '4'].includes(status) && !['2', '3', '4'].includes(oldMission.status)) {
                     oldMission.status = status || '1' // 更新任务的状态：如果状态丢失那么默认为初始化状态
-                    console.log(currentMbs, 'speed')
                     await this.dbOperation.update(uid, { name, percent, speed: currentMbs, timemark, size: targetSize, message, status: status || '1' })
-                } else {
-                    // 更新任务状态为下载完成(下载失败)：只需要更新下载状态
+                    // this.callbackStatus({ uid, status: status || '1' })
+                } else if ((finish || ['3', '4'].includes(status)) && status !== 2) {
+                    // 更新任务状态为下载完成(下载失败、完成下载)：只需要更新下载状态
+                    log.info(`mission finished or error happend to be stoped, change current mission status: ${oldMission.status} to ${status}`)
                     oldMission.status = status
                     const updateOption = { status: oldMission.status }
+                    // 如果是完成下载，将下载进度更新为 100
                     if (status === '3') updateOption.percent = '100'
+                    // 如果是下载失败，添加错误的信息
                     if (status === '4') updateOption.message = message
                     await this.dbOperation.update(uid, updateOption)
+                    this.callbackStatus({ uid, status: updateOption.status })
                     // 从missionList内移除任务
                     this.missionList = this.missionList.filter(i => i.uid !== uid)
+                    this.insertNewMission()
+                } else if (!finish && status === '2') {
+                    log.info('manual stop mission')
+                    // 手动停止下载
+                    oldMission.status = '2'
+                    await this.dbOperation.update(uid, { status: '2' })
+                    this.callbackStatus({ uid, status: '2' })
+                    // 终止下载是异步逻辑，需要通过 stopMission内的终止任务的 callback 来回调终止成功的信息
+                    if (this.stopMission.findIndex(i => i.uid === uid) !== -1) {
+                        const missionToStop = this.stopMission.find(i => i.uid === uid)
+                        missionToStop && missionToStop?.callback()
+                    }
+                    this.missionList = this.missionList.filter(i => i.uid !== uid)
+                    this.insertNewMission()
                 }
             } else {
-                // 如果没有下载任务管理内不存在任务
+                // 如果没有下载任务管理内不存在任务, 直接更新库的数据
                 await this.dbOperation.update(uid, { name, percent, speed: currentMbs, timemark, size: targetSize, message, status: status || '1' })
+                this.callbackStatus({ uid, status: status || '1' })
             }
-            // finish为True,表示有下载任务完成，那么可以添加新的下载任务到任务管理内, 或者 status为4/3的时候去添加下载任务
-            // 如果用户手动继续下载任务
-            if (finish || ['4', '3'].includes(status)) this.insertNewMission()
         } catch (e) {
             log.error(e)
         }
     }
 
     /**
-     * @description insert download mission to database for waiting download
+     * @description insert download mission to database for waiting download / 将下载任务添加到数据库状态为等待
      * @async
      * @param {*} mission
      * @returns {*}
@@ -154,13 +172,14 @@ class Oimi {
      * @async
      * @returns {*}
      */
-    async initalMission () {
+    async initMission () {
         const allMissions = await this.dbOperation.queryMissionByType('needResume')    
         // 继续恢复下载任务     
         const missions = allMissions.slice(0, this.maxDownloadNum)
         for (let mission of missions) {
             const ffmpegHelper = new FfmpegHelper({ VERBOSE: this.verbose })
             this.missionList.push({ ...mission.dataValues, ffmpegHelper })
+            log.info('initMission for start download')
             await this.startDownload({ ffmpegHelper, mission, outputformat: '', preset: mission.preset }, false)
         }
     }
@@ -171,13 +190,17 @@ class Oimi {
      * @param {*} mission
      */
     async insertNewMission () {
+        log.info('insertNewMission')
         const waitingMissions = await this.dbOperation.queryMissionByType()
         const missionListLen = this.missionList.length
         // 插入的任务的数量
+        log.info('waitingMissions length', waitingMissions.length, 'current Mission List length', missionListLen)
         const insertMissionNum = this.maxDownloadNum - missionListLen
+        log.info('insertMissionNum: ', insertMissionNum)
         if (waitingMissions.length > 0) {
             const insertMissions = waitingMissions.slice(0, insertMissionNum)
             for (let mission of insertMissions) {
+                log.info('add new mission')
                 const ffmpegHelper = new FfmpegHelper({ VERBOSE: this.verbose })
                 // mission.dataValues is json data
                 this.missionList.push({ ...mission.dataValues, ffmpegHelper })
@@ -186,12 +209,16 @@ class Oimi {
         }
     }
 
+    /**
+     * @description 开始下载任务
+     *
+     * */
     async startDownload ({ mission, ffmpegHelper, outputformat, preset }, isNeedInsert = true) {
         const uid = mission.uid
+        log.info('start download mission: ', uid)
         try {
             if (isNeedInsert) await this.dbOperation.create(mission)
             ffmpegHelper.setInputFile(mission.url, mission.useragent)
-            if (ffmpegHelper.PROTOCOL_TYPE === 'unknown') throw new Error('this url is not supported to download')
             ffmpegHelper.setOutputFile(mission.filePath)
             .setUserAgent(mission.useragent)
             .setThreads(this.thread)
@@ -199,26 +226,27 @@ class Oimi {
             .setOutputFormat(outputformat)
             .start(params => {
                 // 实时更新任务信息
-                const throttledFunction = throttle(
-                    this.updateMission.bind(this, uid, { ...mission, status: params.percent >= 100 ? '3' : '1', ...params }),
-                    1000,
-                )
-                throttledFunction()
+                this.updateMission(uid, { ...mission, status: params.percent >= 100 ? '3' : '1', ...params })
             }).then(() => {
-                // todo: create download mission support dowloaded callback
-                if (this.eventCallback && typeof this.eventCallback === 'function') this.eventCallback({ name: mission.name, status: '3' })
+                log.info(`success download mission: ${mission.name}`)
+                // todo: create download mission support downloaded callback
                 this.updateMission(uid, { ...mission, percent: 100, status: '3' }, true)
-            }).catch(e => {
+            }).catch((e) => {
+                log.warn('catched downloading error:', String(e))
+                // 为什么终止下载会执行多次 catch
                 // 下载中发生错误
-                if (this.eventCallback && typeof this.eventCallback === 'function') this.eventCallback({ name: mission.name, status: '4', message: String(e) })
-                this.updateMission(uid, { ...mission, status: '4', message: String(e) })
-                log.warn('downloading error:', e)
+                if (['ffmpeg was killed with signal SIGKILL', 'ffmpeg exited with code 255'].some(error => String(e).indexOf(error) !== -1)) {
+                    // 任务被暂停
+                    this.updateMission(uid, { ...mission, status: '3', message: 'mission stopped' })
+                } else {
+                    this.updateMission(uid, { ...mission, status: '4', message: String(e) })
+                }
             })
-            return 'mission created'
+            return 0
         } catch (e) {
-            if (this.eventCallback && typeof this.eventCallback === 'function') this.eventCallback({ name: mission.name, status: '4', message: String(e) })
-            this.updateMission(uid, { ...mission, status: '4', message: String(e) })
             log.warn('downloading error:', e)
+            await this.updateMission(uid, { ...mission, status: '4', message: String(e) })
+            return 1
         }
     }
 
@@ -244,20 +272,25 @@ class Oimi {
         }
         // over max download mission
         if (this.missionList.length >= this.maxDownloadNum) {
+            log.warn('over max download mission, insert to missionList db', JSON.stringify(this.missionList.map(i => ({ uid: i.uid, name: i.name }))))
             mission.status = '5' // set mission status is waiting
+            // add misson to db
             await this.insertWaitingMission(mission)
-            return 'mission created'
+            return { uid: mission.uid, name: mission.name }
         } else {
-            // contiune download
+            // continue download
+            log.info('start downloading mission')
+            // 创建下载任务实例
             const ffmpegHelper = new FfmpegHelper({ VERBOSE: this.verbose })
             this.missionList.push({ ...mission, ffmpegHelper })
-            await this.startDownload({ ffmpegHelper, mission, outputformat, preset })
-            return 'mission created'
+            await this.startDownload({ ffmpegHelper, mission, outputformat, preset }, true)
+            log.verbose(`current missionList have ${this.missionList.length}s missions`)
+            return { uid: mission.uid, name: mission.name }
         }
     }
     
     /**
-    * @description pause download mission
+    * @description pause download mission / 暂停下载任务
     * @param {string} uid
     */
     async pauseMission (uid) {
@@ -267,71 +300,47 @@ class Oimi {
                 mission.ffmpegHelper.kill('SIGSTOP')
                 this.updateMission(uid, { ...mission, status: '2' })
             }
-            return 'mission pause'
+            return 'mission paused'
         } catch (e) {
             return e
         }
     }
 
     /**
-    * @description resume download mission
+    * @description resume download mission/恢复下载任务
     * @param {string} uid
     */
-    resumeDownload (uid) {
-        return new Promise((resolve, reject) => {
-            (async () => {
-                const missionInList = this.missionList.find(i => i.uid === uid)
-                if (missionInList) {
-                    missionInList.ffmpegHelper.kill('SIGCONT')
-                    resolve('resume download')
-                } else {
-                    // 恢复下载任务存在两种情况 missionList里面已经存在数据 直接调用kill('恢复')
-                    const mission = await this.dbOperation.queryOne(uid)
-                    if (mission) {
-                        try {
-                            const suffix = this.helper.getUrlFileExt(mission.filePath)
-                            const ffmpegHelper = new FfmpegHelper()
-                            this.missionList.push({ ...mission, ffmpegHelper })
-                            await ffmpegHelper.setInputFile(mission.url)
-                            .setOutputFile(mission.filePath)
-                            .setThreads(this.thread)
-                            .setTimeMark(mission.timemark)
-                            .setOutputFormat(suffix)
-                            .start(params => {
-                                resolve('resume download')
-                                const throttledFunction = throttle(
-                                    this.updateMission.bind(this, uid, { 
-                                        ...mission, 
-                                        status: '1', 
-                                        ...params }),
-                                    1000,
-                                )
-                                throttledFunction()
-                            }).then(() => {
-                                // todo: create download mission support dowloaded callback
-                                if (this.eventCallback && typeof this.eventCallback === 'function') this.eventCallback({ name: mission.name, status: '3' })
-                                this.updateMission(uid, { ...mission, percent: 100, status: '3' }, true)
-                            }).catch(e => {
-                                // 下载中发生错误
-                                if (this.eventCallback && typeof this.eventCallback === 'function') this.eventCallback({ name: mission.name, status: '4', message: String(e) })
-                                this.updateMission(uid, { ...mission, status: '4', message: String(e) })
-                                log.warn('downloading error:', e)
-                            })
-                        } catch (e) {
-                            if (this.eventCallback && typeof this.eventCallback === 'function') this.eventCallback({ name: mission.name, status: '4', message: String(e) })
-                            this.updateMission(uid, { ...mission, status: '4', message: String(e) })
-                            reject(e)
-                        }
-                    } else {
-                        reject(new Error('mission not found'))
-                    }
+    async resumeDownload (uid) {
+        log.info('resumeDownload')
+        // 恢复下载任务存在两种情况 missionList里面已经存在数据 直接调用kill('恢复')
+        const mission = this.missionList.find(i => i.uid === uid)
+        if (mission) {
+            mission.ffmpegHelper.kill('SIGCONT')
+            return { code: 0 }
+        } else {
+            let mission = await this.dbOperation.queryOne(uid)
+            log.info('resumeDownload mission', JSON.stringify(mission))
+            if (mission) {
+                try {
+                    mission = mission.toJSON()
+                    log.info(JSON.stringify(mission))
+                    const suffix = this.helper.getUrlFileExt(mission.filePath)
+                    const ffmpegHelper = new FfmpegHelper()
+                    this.missionList.push({ ...mission, ffmpegHelper })
+                    await this.startDownload({ ffmpegHelper, mission, outputformat: suffix, preset: '' }, false)
+                    return { code: 0 }
+                } catch (e) {
+                    this.updateMission(uid, { ...mission, status: '4', message: String(e) })
+                    return { code: 1, message: String(e) }
                 }
-            })()
-        })
+            } else {
+                return { code: 1, message: 'mission not found' }
+            }
+        }
     }   
     
     /**
-     * @description delete download mission
+     * @description delete download mission / 删除下载任务v
      * @param {string} uid
      */
     deleteDownload (uid) {
@@ -354,17 +363,30 @@ class Oimi {
     }
 
     /**
-     * @description stop mission download,  mission can be play event though it's not finished download
+     * @description stop mission download,  mission can be play event though it's not finished download / 终止下载任务
      * @param {strig} uid 
      */
     stopDownload (uid) {
+        log.info(`stopDownload Mision uid: ${uid}`)
         return new Promise((resolve, reject) => {
             try {
-                const missionIndex = this.missionList.findIndex(i => i.uid === uid)
-                if (missionIndex !== -1) {
-                    const mission = this.missionList[missionIndex]
-                    mission.ffmpegHelper.kill('SIGINT')
-                    this.updateMission(uid, { ...mission, status: '3' })
+                const mission = this.missionList.find(i => i.uid === uid)
+                if (mission) {
+                    log.info(`stop download mission by uid: ${mission?.uid}`)
+                    // SIGKILL 下载， 这里需要判断下载任务的类型，才可以使用不同的终止方式
+                    this.stopMission.push({
+                        uid,
+                        callback: () => {
+                            log.info('成功终止')
+                            resolve(0)
+                        },
+                    })
+                    mission.ffmpegHelper.kill()
+                } else {
+                    log.info(`mission uid: ${uid} is not found in missionList`)
+                    // if mission is not found in missionList, to find the mission in db, change the status
+                    // 还在等待中的下载任务终止，直接更新内容即可
+                    this.updateMission(uid, { status: '2' }).then(() => resolve(0)).catch((e) => reject(e))
                 }
             } catch (e) {
                 reject(e)
@@ -373,11 +395,11 @@ class Oimi {
     }
 
     /**
-    * @description kill all download mission
+    * @description kill all download mission / 杀死所有的下载任务
     */
     async killAll () {
         for (const mission of this.missionList) {
-            mission.ffmpegHelper?.kill('SIGKILL')
+            mission.ffmpegHelper.kill()
             if (mission && mission.uid && mission.status === '1') {
                 try {
                     await this.updateMission(mission.uid, { ...mission, status: '2' })

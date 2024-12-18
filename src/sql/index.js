@@ -3,12 +3,15 @@ const { Op } = require('sequelize')
 const dbOperation = {
     async sync () {
         try {
-            await sequelize.sync()
+            await sequelize.sync({ alter: true })
+            // 手动处理用户数据
+            await SysDownloadDb.update({ perset: 'medium', outputformat: 'mp4' }, { where: { perset: null } })
             console.log('\x1b[32m[ffandown] Database synced successfully\x1b[0m')
         } catch (e) {
             console.log('\x1b[31m[ffandown] Database synced failed:' + String(e).trim() + '\x1b[0m')
         }
     },
+    
     /**
      * @description create download record
      * @param {*} param {uid, name, url, percent, filePath, status, speed} 
@@ -76,12 +79,12 @@ const dbOperation = {
         }
     },
     // 获取等待中的下载任务
-    async  queryMissionByType (type = 'waiting') {
+    async queryMissionByType (type = 'waiting') {
         const statusMap = {
             waiting: ['5'],
             downloading: ['0', '1', '2'],
             finished: ['3', '4'],
-            needResume: ['0', '1', '2', '5'],
+            needResume: ['5'], // 可以恢复下载或者初始化时等待下载的任务 3/4不需要管
         }
         try {
             const allMissions = await SysDownloadDb.findAll({ where: { status: { [Op.in]: statusMap[type] } }, order: [['crt_tm', 'ASC']] })

@@ -53,6 +53,23 @@ const SysDownloadDb = sequelize.define('sys_download', {
         type: Sequelize.STRING,
         allowNull: true,
     },
+    perset: {
+        type: Sequelize.STRING,
+        allowNull: true,
+        default: 'medium',
+        comment: 'ffmpeg tranform preset',
+    },
+    outputformat: {
+        type: Sequelize.STRING,
+        allowNull: true,
+        default: 'mp4',
+        comment: 'ffmpeg output format',
+    },
+    protocolType: {
+        type: Sequelize.STRING,
+        allowNull: true,
+        comment: 'url protocol type',
+    },
     status: {
         type: Sequelize.STRING,
         allowNull: false,
