@@ -106,7 +106,7 @@ class FfmpegHelper {
                 } else {
                     const { format_name, duration } = metadata?.format
                     this.duration = duration ?? 0
-                    log.verbose('format_name:' + format_name + ',duration:' + duration)
+                    log.verbose('format_name: ' + format_name + ' duration: ' + duration)
                     if (format_name === 'hls') {
                         resolve('m3u8')
                     } else if (format_name.split(',').includes('mp4')) {
@@ -173,7 +173,7 @@ class FfmpegHelper {
             this.ffmpegCmd.seekInput(this.TIMEMARK)
         }
         this.ffmpegCmd.outputOptions(`-preset ${this.PRESET || 'veryfast'}`)
-
+        // PROTOCOL_TYPE为预留字段
         const liveProtocol = this.PROTOCOL_TYPE
         switch (liveProtocol) {
             default:
@@ -275,24 +275,18 @@ class FfmpegHelper {
                         _this.handlerProcess(progress, listenProcess)
                     })
                     .on('stderr', function (stderrLine) {
-                        log.verbose('Stderr output:' + stderrLine)
+                        // log.verbose('Stderr output:' + stderrLine)
                     })
                     .on('start', function (commandLine) {
                         _this.startTime = Date.now()
-                        log.verbose('FFmpeg command: ' + commandLine)
-                        console.log('commandLine', commandLine)
-                        // setTimeout(function () {
-                        //     // _this.ffmpegCmd.kill('SIGSTOP')
-                        //     _this.kill('SIGSTOP')
-                        //     console.warn('sendKill message')
-                        // }, 9000)
+                        log.verbose('FFmpeg exec command: ' + commandLine)
                     })
                     .on('error', (error) => {
-                        log.verbose('ffmpeg error happed:' + error)
+                        log.error('FFmpeg error happed: ' + error)
                         reject(error)
                     })
                     .on('end', () => {
-                        console.log('finished')
+                        log.verbose(`finish mission: ${_this.M3U8_FILE}`)
                         resolve('')
                     })
                     .run()
@@ -310,7 +304,7 @@ class FfmpegHelper {
         // SIGSTOP 挂起ffmpeg
         // SIGCONT 恢复下载
         // SIGKILL 杀死进程
-        console.log('kill with signal: ', signal, this.ffmpegCmd?.ffmpegProc?.pid)
+        log.verbose(`kill process with signal: ${signal}`)
         try {
             if (signal) this.ffmpegCmd.ffmpegProc.kill(signal)
             else if (this.PROTOCOL_TYPE === 'live') {
@@ -319,7 +313,7 @@ class FfmpegHelper {
                 this.ffmpegCmd.ffmpegProc.kill('SIGKILL')
             }
         } catch (e) {
-            console.log(e, 'error')
+            log.error('error happend in kill process: ', e)
         } 
     }
 }
